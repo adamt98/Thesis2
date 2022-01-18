@@ -20,19 +20,27 @@ class ModelAverager():
         self.models = []
 
     def q_vals(self, X):
-        X = np.array(X).reshape((len(X),len(X[0])))
+        #X = np.array(X).reshape((len(X),len(X[0])))
         if len(self.models) == 0:
-            return np.full(X.shape[0], 5.0)
+            return np.full(X.shape[0], 0.0)
         else:
-            y = [model.predict(X) for model in self.models]
-            return np.mean(y, axis = 0)
+            #y = [model.predict(X) for model in self.models]
+            return self.models[-1].predict(X) #np.mean(y, axis = 0)
+
+    def consensus_q_vals(self, X):
+        y = [model.predict(X) for model in self.models]
+        return np.mean(y, axis = 0)
 
     # returns the best action according to consensus
     def predict_action(self, state, env : DiscreteEnv =None):
         if env is None:
             env = self.env
 
-        evals = [self.q_vals([np.append(state, action)]) for action in env.actions]
+        #appended = [np.append(state, action) for action in env.actions]
+        appended = np.append(np.tile(state,(len(env.actions),1)), np.array(env.actions).reshape((-1,1)), axis=1)
+        #evals = [self.q_vals([np.append(state, action)]) for action in env.actions]
+        
+        evals = self.q_vals(appended)
         # break ties randomly
         actionIndex = np.random.choice(np.flatnonzero(evals == np.max(evals)))
         return env.actions[actionIndex], evals[actionIndex]
@@ -86,8 +94,8 @@ class ModelAverager():
                     actions.append(action)
 
             # build x,y data
-            x = [np.append(state, action) for state, action in zip(states, actions)]
-            q_vals = self.q_vals(x[1:]) # don't use the first state-action pair
+            x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)#[np.append(state, action) for state, action in zip(states, actions)]
+            q_vals = self.consensus_q_vals(x[1:]) # don't use the first state-action pair
             y = rewards + self.gamma * q_vals
 
             # train the last model

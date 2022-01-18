@@ -105,7 +105,7 @@ def simulate_pnl( model, model_delta, n_steps, env_kwargs):
                 else:
                     df = model_delta.test(delta_env)
 
-            pnl_paths_dict[key].append(list(df.pnl.values)) # cumsum deleted
+            pnl_paths_dict[key].append(df.pnl) # cumsum deleted
             pnl_dict[key].append(df.pnl.cumsum().values[-1])
             tcosts_dict[key].append(df.cost.values[-1])
             ntrades_dict[key].append(df.trades.values[-1])
@@ -130,12 +130,12 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
 
     plt.subplot(121)
     for i in range(len(pnl_dict["model"])):
-        plt.plot(pnl_paths_dict["model"][i], color='r', alpha=0.4)
+        plt.plot(pnl_paths_dict["model"][i].cumsum().values, color='r', alpha=0.4)
     plt.title("PnL paths Model")
 
     plt.subplot(122)
     for i in range(len(pnl_dict["delta"])):
-        plt.plot(pnl_paths_dict["delta"][i], color='r', alpha=0.4)
+        plt.plot(pnl_paths_dict["delta"][i].cumsum().values, color='r', alpha=0.4)
     plt.title("PnL paths Delta Hedge")
 
 
@@ -169,8 +169,8 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
 
 
     plt.show()
-
-    pd.DataFrame(delta_pnl_std).plot(kind='density')
+    
+    pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
 
 
 

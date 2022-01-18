@@ -28,8 +28,11 @@ class ModelAverager():
             return self.models[-1].predict(X) #np.mean(y, axis = 0)
 
     def consensus_q_vals(self, X):
-        y = [model.predict(X) for model in self.models]
-        return np.mean(y, axis = 0)
+        if len(self.models) == 0:
+            return np.full(X.shape[0], 0.0)
+        else:
+            y = [model.predict(X) for model in self.models]
+            return np.mean(y, axis = 0)
 
     # returns the best action according to consensus
     def predict_action(self, state, env : DiscreteEnv =None):
@@ -97,7 +100,7 @@ class ModelAverager():
             x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)#[np.append(state, action) for state, action in zip(states, actions)]
             q_vals = self.consensus_q_vals(x[1:]) # don't use the first state-action pair
             y = rewards + self.gamma * q_vals
-
+            
             # train the last model
             self.models.append(clone(self.type))    
             self.models[-1].fit(x[:-1],y) # don't use the last state-action pair

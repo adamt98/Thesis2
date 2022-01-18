@@ -8,11 +8,14 @@ from discrete_environments import DiscreteEnv
 from scipy.stats import norm
 from tqdm import tqdm as tq
 import random
+import graphviz 
+from sklearn import tree
+
 
 class ModelAverager():
     def __init__(self, env : DiscreteEnv, gamma):
         self.env = env
-        self.type = DecisionTreeRegressor()
+        self.type = DecisionTreeRegressor(max_depth=15, min_samples_leaf=100, max_leaf_nodes=100)
         self.models = []
         self.gamma = gamma
 
@@ -100,13 +103,24 @@ class ModelAverager():
             x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)#[np.append(state, action) for state, action in zip(states, actions)]
             q_vals = self.consensus_q_vals(x[1:]) # don't use the first state-action pair
             y = rewards + self.gamma * q_vals
-            
+
             # train the last model
             self.models.append(clone(self.type))    
-            self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
+            fitted = self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
             del x
             del q_vals
             del y
+            if batch == batches -1:
+                dot_data = tree.export_graphviz(fitted, out_file=None) 
+                graph = graphviz.Source(dot_data) 
+                graph.render("check") 
+                dot_data = tree.export_graphviz(fitted, out_file=None, 
+                     feature_names=["holdings","price","ttm","action"],  
+                     class_names=["q val"],  
+                     filled=True, rounded=True,  
+                     special_characters=True)  
+                graph = graphviz.Source(dot_data)  
+                return graph 
 
     def test(self, env : DiscreteEnv):
         done = False

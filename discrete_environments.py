@@ -30,7 +30,7 @@ class DiscreteEnv():
         # Create discrete action space
         # self.max_buyable_shares = round((n_actions-1)/2)
         # self.actions = np.arange(-self.max_buyable_shares,self.max_buyable_shares+1,1,int)
-        self.actions = np.arange(-100, 101)
+        self.actions = np.arange(0, 101)
 
         # Get sample path from simulator, initialized in reset()
         self.generator = generator

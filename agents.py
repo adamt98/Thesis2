@@ -11,11 +11,13 @@ import random
 import graphviz 
 from sklearn import tree
 
+from lineartree import LinearTreeRegressor
+
 
 class ModelAverager():
     def __init__(self, env : DiscreteEnv, gamma):
         self.env = env
-        self.type = DecisionTreeRegressor(max_depth=15, min_samples_leaf=100, max_leaf_nodes=100)
+        self.type = LinearTreeRegressor(base_estimator= LinearRegression(), max_depth=19, min_samples_leaf=100)
         self.models = []
         self.gamma = gamma
 
@@ -25,14 +27,14 @@ class ModelAverager():
     def q_vals(self, X):
         #X = np.array(X).reshape((len(X),len(X[0])))
         if len(self.models) == 0:
-            return np.full(X.shape[0], 0.0)
+            return np.full(X.shape[0], 4.0)
         else:
             #y = [model.predict(X) for model in self.models]
             return self.models[-1].predict(X) #np.mean(y, axis = 0)
 
     def consensus_q_vals(self, X):
         if len(self.models) == 0:
-            return np.full(X.shape[0], 0.0)
+            return np.full(X.shape[0], 4.0)
         else:
             y = [model.predict(X) for model in self.models]
             return np.mean(y, axis = 0)
@@ -106,21 +108,21 @@ class ModelAverager():
 
             # train the last model
             self.models.append(clone(self.type))    
-            fitted = self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
+            self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
             del x
             del q_vals
             del y
-            if batch == batches -1:
-                dot_data = tree.export_graphviz(fitted, out_file=None) 
-                graph = graphviz.Source(dot_data) 
-                graph.render("check") 
-                dot_data = tree.export_graphviz(fitted, out_file=None, 
-                     feature_names=["holdings","price","ttm","action"],  
-                     class_names=["q val"],  
-                     filled=True, rounded=True,  
-                     special_characters=True)  
-                graph = graphviz.Source(dot_data)  
-                return graph 
+            # if batch == batches -1:
+            #     dot_data = tree.export_graphviz(fitted, out_file=None) 
+            #     graph = graphviz.Source(dot_data) 
+            #     graph.render("check") 
+            #     dot_data = tree.export_graphviz(fitted, out_file=None, 
+            #          feature_names=["holdings","price","ttm","action"],  
+            #          class_names=["q val"],  
+            #          filled=True, rounded=True,  
+            #          special_characters=True)  
+            #     graph = graphviz.Source(dot_data)  
+            #     return graph 
 
     def test(self, env : DiscreteEnv):
         done = False

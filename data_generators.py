@@ -54,6 +54,10 @@ class GBM_Generator:
             - ttm  = time to maturity in periods
             - call = True/False, whether it's a call or a put
         """
+        if ttm == 0:
+            if call: return max(self.current - K, 0)
+            else: return max(K - self.current, 0)
+
         ttm = ttm * self.dt # adjusting to annual terms
         d1 = (np.log(self.current/K) + (self.r + self.sigma**2/2) * ttm ) / (self.sigma * sqrt(ttm))
         d2 = d1 - self.sigma * sqrt(ttm)

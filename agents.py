@@ -25,7 +25,6 @@ class ModelAverager():
         self.models = []
 
     def q_vals(self, X):
-        #X = np.array(X).reshape((len(X),len(X[0])))
         if len(self.models) == 0:
             return np.full(X.shape[0], 4.0)
         else:
@@ -44,18 +43,14 @@ class ModelAverager():
         if env is None:
             env = self.env
 
-        #appended = [np.append(state, action) for action in env.actions]
         appended = np.append(np.tile(state,(len(env.actions),1)), np.array(env.actions).reshape((-1,1)), axis=1)
-        #evals = [self.q_vals([np.append(state, action)]) for action in env.actions]
-        
         evals = self.q_vals(appended)
         # break ties randomly
         actionIndex = np.random.choice(np.flatnonzero(evals == np.max(evals)))
         return env.actions[actionIndex], evals[actionIndex]
 
     def predict_random(self, env : DiscreteEnv = None):
-        if env is None:
-            env = self.env
+        if env is None: env = self.env
         return random.choice(env.actions)
 
     def train(self, n_steps, batches, eps_func):

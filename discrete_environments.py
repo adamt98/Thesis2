@@ -2,12 +2,17 @@ import numpy as np
 import pandas as pd
 from data_generators import GBM_Generator
 
-class DiscreteEnv():
+import gym
+from gym import spaces
+from stable_baselines3.common.vec_env import DummyVecEnv
+
+class DiscreteEnv(gym.Env):
 
     def __init__(self,
                 generator : GBM_Generator,
                 ttm,
                 kappa = 0.1,
+                cost_multiplier = 0.5,
                 testing = False):
         
         # Init some constants
@@ -19,11 +24,16 @@ class DiscreteEnv():
         self.trades = 0
         self.episode = 0
         self.K = generator.current # ATM
+        self.cost_multiplier = cost_multiplier
 
         self.generator = generator
         
+        # State (observation) space for Gym
+        self.observation_space = spaces.Box(low = np.array([0, 0, 0]), high = np.array([100, np.inf, self.expiry]) )
+
         # Create discrete action space
         self.actions = np.arange(0, 101)
+        self.action_space = spaces.Discrete(101)
 
         # Memorize some things for plotting purposes
         self.option_memory = []
@@ -82,7 +92,7 @@ class DiscreteEnv():
         return self.state, reward, self.terminal, {"output":pd.DataFrame()}
 
     def _get_trading_cost(self, action):
-        return 0.5 * (abs(action-self.state[0]) + 0.01 * ((action - self.state[0])**2))
+        return self.cost_multiplier * (abs(action-self.state[0]) + 0.01 * ((action - self.state[0])**2))
 
     def _get_reward(self, new_opt_val, old_opt_val, new_und, old_und, trading_cost):
         pnl = - 100 * (new_opt_val - old_opt_val) + (new_und - old_und) * self.state[0]
@@ -130,3 +140,9 @@ class DiscreteEnv():
         state = self.reset()
         self.generator.reset_with_seed(seed)
         return state
+
+    def get_sb_env(self):
+        ''' This function is called by the main file, initializes the whole environment. '''
+        e = DummyVecEnv([lambda: self])
+        obs = e.reset()
+        return e, obs

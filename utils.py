@@ -5,6 +5,7 @@ from tqdm import tqdm
 from IPython.utils import io
 
 from discrete_environments import DiscreteEnv
+from agents import DRLAgent
 
 class EpsFunction():
     def __init__(self, total_steps):
@@ -19,7 +20,7 @@ class EpsFunction():
 
 def plot_decisions(delta, df):
     # underlying & option values
-    plt.figure(1, figsize=(18, 6))
+    plt.figure(1, figsize=(12, 6))
     plt.subplot(121)
     plt.plot(delta.underlying)
     plt.title("underlying")
@@ -32,7 +33,7 @@ def plot_decisions(delta, df):
     model_holdings = df.holdings.values
     model_actions = df.actions.values
 
-    plt.figure(2, figsize=(18, 12))
+    plt.figure(2, figsize=(12, 8))
     # Holdings
     plt.subplot(211)
     plt.plot(delta_holdings, label='delta')
@@ -79,7 +80,7 @@ def plot_pnl(delta, df):
 
     plt.show()
 
-def simulate_pnl( model, model_delta, n_steps, env_kwargs):
+def simulate_pnl( model, model_delta, n_steps, isDRL, env_kwargs):
     pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
 
     env = DiscreteEnv(**env_kwargs)
@@ -92,7 +93,16 @@ def simulate_pnl( model, model_delta, n_steps, env_kwargs):
             delta_env.reset_with_seed(11301*i) 
             with io.capture_output() as _:
                 if key == "model":
-                    df = model.test(env)
+                    if isDRL:
+                        df = DRLAgent.Prediction(
+                            model=model, 
+                            environment = env,
+                            pred_args = {"deterministic":True})
+
+                        df = df['output']
+
+                    else:
+                        df = model.test(env)
                 else:
                     df = model_delta.test(delta_env)
 
@@ -105,14 +115,14 @@ def simulate_pnl( model, model_delta, n_steps, env_kwargs):
 
 def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     # Joint final PnL histograms
-    plt.figure(1, figsize=(18, 12))
+    plt.figure(1, figsize=(9, 6))
     plt.hist(pnl_dict["model"], label="model")
     plt.hist(pnl_dict["delta"], label="delta")
     plt.title("PnL Histograms")
     plt.legend()
 
     # PnL paths graphs
-    plt.figure(2, figsize=(18, 6))
+    plt.figure(2, figsize=(18, 4))
 
     plt.subplot(121)
     for i in range(len(pnl_dict["model"])):
@@ -126,7 +136,7 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
 
 
     # Trades and Costs histograms
-    plt.figure(3, figsize=(18, 6))
+    plt.figure(3, figsize=(12, 6))
 
     plt.subplot(121)
     plt.hist(tcosts_dict["model"], label = "Model")
@@ -147,7 +157,7 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
         delta_pnl_std.append(np.std(pnl_paths_dict["delta"][i]))
 
 
-    plt.figure(4, figsize=(18, 12))
+    plt.figure(4, figsize=(9,6))
     plt.hist(model_pnl_std, label="model")
     plt.hist(delta_pnl_std, label="delta")
     plt.title("Histograms: Standard Deviation of PnL")

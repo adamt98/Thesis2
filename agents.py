@@ -10,8 +10,15 @@ from tqdm import tqdm as tq
 import random
 import graphviz 
 from sklearn import tree
-
 from lineartree import LinearTreeRegressor
+
+# RL models from stable-baselines
+from stable_baselines3 import A2C, PPO, TD3, DDPG, SAC, DQN
+import config
+
+MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO, "dqn": DQN}
+MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"] for x in MODELS.keys()}
+TENSORBOARD_LOG_DIR = f"tensorboard_log"
 
 
 class ModelAverager():
@@ -160,3 +167,50 @@ class DeltaHedge():
             done = terminal
 
         return info["output"]
+
+class DRLAgent():
+    @staticmethod
+    def Prediction(model, environment, pred_args={}):
+        test_env, test_obs = environment.get_sb_env()
+        """make a prediction"""
+        
+        for i in range(environment.expiry):
+            action, _states = model.predict(test_obs, **pred_args)
+            test_obs, rewards, dones, info = test_env.step(action)
+            if dones[0]:
+                print("hit end!")
+                break
+                
+        return info[0]
+    
+    def __init__(self, env):
+        self.env = env
+
+    def train_model(self, model, tb_log_name, total_timesteps=5000, n_eval_episodes=5 ):
+        model = model.learn(total_timesteps=total_timesteps, tb_log_name=tb_log_name, n_eval_episodes=n_eval_episodes)
+        return model
+        
+    def get_model(
+        self,
+        model_name,
+        policy="MlpPolicy",
+        policy_kwargs=None,
+        model_kwargs=None,
+        verbose=1,
+    ):
+        if model_name not in MODELS:
+            raise NotImplementedError("NotImplementedError")
+
+        if model_kwargs is None:
+            model_kwargs = MODEL_KWARGS[model_name]
+
+        print(model_kwargs)
+        model = MODELS[model_name](
+            policy=policy,
+            env=self.env,
+            tensorboard_log=f"{TENSORBOARD_LOG_DIR}/{model_name}",
+            verbose=verbose,
+            policy_kwargs=policy_kwargs,
+            **model_kwargs,
+        )
+        return model

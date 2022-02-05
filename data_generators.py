@@ -81,3 +81,64 @@ class GBM_Generator:
     def reset_with_seed(self, seed):
         self.current = self.initial
         random.seed(seed)
+
+class HestonGenerator:
+    def __init__(self, S0, r, V0, rho, kappa, theta, xi, freq, seed = None):
+        self.initial = S0
+        self.current = S0
+        self.r = r # annualized drift
+
+        self.V0 = V0 # annualized starting variance
+        self.rho = rho # correl BM
+        self.kappa = kappa # mean reversion
+        self.theta = theta # long-run vol mean
+        self.xi = xi # vol of vol
+        self.current_var = V0
+        self.sigma = np.sqrt(V0)
+
+        self.seed = seed
+        self.T = 250 # number of trading days
+        self.freq = freq # e.g. freq = 0.5 for trading twice a day
+        self.dt = (1.0 / self.T) * freq # time increment
+
+        if seed is not None:
+            random.seed(seed)
+
+    def get_next(self):
+        multnorm = np.random.multivariate_normal([0,0],[[1,self.rho],[self.rho,1]])
+        
+        self.current_var = self.current_var + self.kappa*(self.theta - self.current_var)*self.dt + self.xi*np.sqrt(self.current_var*self.dt)*multnorm[1]
+        self.current_var = np.abs(self.current_var)
+
+        self.current = self.current * np.exp((self.r - 0.5*self.current_var)*self.dt + np.sqrt(self.current_var*self.dt)*multnorm[0])
+        
+        return self.current
+
+    def get_option_value(self, K, ttm, call = True):
+        """
+        Calculates vanilla call/put price under GBM dynamics.
+        """
+        if ttm == 0:
+            if call: return max(self.current - K, 0)
+            else: return max(K - self.current, 0)
+
+        ttm = ttm * self.dt # adjusting to annual terms
+        d1 = (np.log(self.current/K) + (self.r + self.sigma**2/2) * ttm ) / (self.sigma * sqrt(ttm))
+        d2 = d1 - self.sigma * sqrt(ttm)
+        if call:
+            value = self.current * norm.cdf(d1) - K * exp( -self.r*ttm) * norm.cdf(d2)
+        else:
+            value = K * exp( -self.r*ttm) * norm.cdf(-d2) - self.current * norm.cdf(-d1)
+        
+        return value
+
+    def reset(self):
+        self.current = self.initial
+        self.current_var = self.V0
+        if self.seed is not None:
+            random.seed(self.seed)
+
+    def reset_with_seed(self, seed):
+        self.current = self.initial
+        self.current_var = self.V0
+        random.seed(seed)

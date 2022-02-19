@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from torch import maximum
 from tqdm import tqdm
 from IPython.utils import io
 
@@ -116,8 +117,11 @@ def simulate_pnl( model, model_delta, n_steps, isDRL, env_kwargs):
 def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     # Joint final PnL histograms
     plt.figure(1, figsize=(9, 6))
-    plt.hist(pnl_dict["model"], label="model")
-    plt.hist(pnl_dict["delta"], label="delta")
+    binwidth = 20
+    minimum = min(min(pnl_dict["model"]), min(pnl_dict["delta"]))
+    maximum = max(max(pnl_dict["model"]), max(pnl_dict["delta"]))
+    plt.hist(pnl_dict["model"], label="model", bins = np.arange(minimum, maximum + binwidth, binwidth))
+    plt.hist(pnl_dict["delta"], label="delta", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("PnL Histograms")
     plt.legend()
 
@@ -139,14 +143,20 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plt.figure(3, figsize=(12, 6))
 
     plt.subplot(121)
-    plt.hist(tcosts_dict["model"], label = "Model")
-    plt.hist(tcosts_dict["delta"], label = "Delta Hedge")
+    binwidth = 20
+    minimum = min(min(tcosts_dict["model"]), min(tcosts_dict["delta"]))
+    maximum = max(max(tcosts_dict["model"]), max(tcosts_dict["delta"]))
+    plt.hist(tcosts_dict["model"], label = "Model", bins = np.arange(minimum, maximum + binwidth, binwidth))
+    plt.hist(tcosts_dict["delta"], label = "Delta Hedge", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("Trading costs histogram")
     plt.legend()
 
     plt.subplot(122)
-    plt.hist(ntrades_dict["model"], label = "Model")
-    plt.hist(ntrades_dict["delta"], label = "Delta Hedge")
+    binwidth = 1
+    minimum = min(min(ntrades_dict["model"]), min(ntrades_dict["delta"]))
+    maximum = max(max(ntrades_dict["model"]), max(ntrades_dict["delta"]))
+    plt.hist(ntrades_dict["model"], label = "Model", bins = np.arange(minimum, maximum + binwidth, binwidth))
+    plt.hist(ntrades_dict["delta"], label = "Delta Hedge", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("Number of trades histogram")
     plt.legend()
 
@@ -158,8 +168,11 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
 
 
     plt.figure(4, figsize=(9,6))
-    plt.hist(model_pnl_std, label="model")
-    plt.hist(delta_pnl_std, label="delta")
+    binwidth = 1
+    minimum = min(min(model_pnl_std), min(delta_pnl_std))
+    maximum = max(max(model_pnl_std), max(delta_pnl_std))
+    plt.hist(model_pnl_std, label="model", bins = np.arange(minimum, maximum + binwidth, binwidth))
+    plt.hist(delta_pnl_std, label="delta", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("Histograms: Standard Deviation of PnL")
     plt.legend()
 

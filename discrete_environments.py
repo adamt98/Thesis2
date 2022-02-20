@@ -60,7 +60,8 @@ class DiscreteEnv(gym.Env):
         old_und_value = self.state[1]
         
         # state: s -> s+1
-        self.cost += self._get_trading_cost(action)
+        self.current_cost = self._get_trading_cost(action)
+        self.cost += self.current_cost
         if (action != self.state[0]) : self.trades += 1
 
         new_und = self.generator.get_next()
@@ -71,7 +72,7 @@ class DiscreteEnv(gym.Env):
         reward = self._get_reward(new_option_value, old_option_value, 
                                         new_und = self.state[1], 
                                         old_und = old_und_value, 
-                                        trading_cost = self.cost - old_cost)
+                                        trading_cost = self.current_cost)
 
         if self.terminal:
             dic = self._out()
@@ -96,7 +97,8 @@ class DiscreteEnv(gym.Env):
 
     def _get_reward(self, new_opt_val, old_opt_val, new_und, old_und, trading_cost):
         pnl = - 100 * (new_opt_val - old_opt_val) + (new_und - old_und) * self.state[0]
-        return ( pnl - 0.5 * self.kappa * (pnl**2) ) - trading_cost
+        total_pnl = pnl - trading_cost
+        return ( total_pnl - 0.5 * self.kappa * (total_pnl**2) )
     
     def _out(self):
         if self.testing:
@@ -194,7 +196,7 @@ class DiscreteEnv2(gym.Env):
 
     def step(self, action):
 
-        action = np.random.choice(np.flatnonzero(action == np.max(action)))
+        #action = np.random.choice(np.flatnonzero(action == np.max(action)))
 
         self.terminal = (self.state[-1] == 1)
         

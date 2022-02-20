@@ -5,7 +5,7 @@ from torch import maximum
 from tqdm import tqdm
 from IPython.utils import io
 
-from discrete_environments import DiscreteEnv
+from discrete_environments import DiscreteEnv, DiscreteEnv2
 from agents import DRLAgent
 
 class EpsFunction():
@@ -179,3 +179,40 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plt.show()
     
     pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
+
+import torch as t
+def simulate_pnl_DQN(model, model_delta, n_steps, env_kwargs, observe_dim=3):
+    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
+
+    env = DiscreteEnv2(**env_kwargs)
+    delta_env = DiscreteEnv(**env_kwargs)
+    
+    for i in tqdm(range(n_steps)):
+        for key in ["model","delta"]:
+            # Perform DRL testing
+            env.reset_with_seed(11301*i)
+            delta_env.reset_with_seed(11301*i) 
+            with io.capture_output() as _:
+                if key == "model":
+                    state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
+                    terminal = False
+                    while not terminal:
+                        with t.no_grad():
+                            old_state = state
+                            # agent model inference
+                            action = model.act_discrete(
+                                {"some_state": old_state}
+                            )
+                            state, reward, terminal, info = env.step(action.item())
+                            state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
+                            
+                    df = info['output']
+                else:
+                    df = model_delta.test(delta_env)
+
+            pnl_paths_dict[key].append(df.pnl)
+            pnl_dict[key].append(df.pnl.cumsum().values[-1])
+            tcosts_dict[key].append(df.cost.values[-1])
+            ntrades_dict[key].append(df.trades.values[-1])
+
+    return pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict

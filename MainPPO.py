@@ -5,13 +5,12 @@ import utils
 import numpy as np
 import matplotlib.pyplot as plt
 
-from machin.frame.algorithms import DQN
-from machin.frame.algorithms.dqn import DQN
+from machin.frame.algorithms import PPO
+from machin.frame.algorithms.ppo import PPO
 from machin.utils.logging import default_logger as logger
 import torch as t
 import torch.nn as nn
 import gym
-import tqdm
 
 observe_dim = 3
 action_num = 101
@@ -21,19 +20,15 @@ solved_repeat = 5
 
 
 # model definition
-class QNet(nn.Module):
+class Net(nn.Module):
     def __init__(self, state_dim, action_num):
-        super(QNet, self).__init__()
+        super(Net, self).__init__()
 
         self.fc1 = nn.Linear(state_dim, 16)
         self.bn1 = nn.LayerNorm(16)
         self.fc2 = nn.Linear(16, 16)
         self.bn2 = nn.LayerNorm(16)
-        self.fc3 = nn.Linear(16, 16)
-        self.bn3 = nn.LayerNorm(16)
-        self.fc4 = nn.Linear(16, 16)
-        self.bn4 = nn.LayerNorm(16)
-        self.fc5 = nn.Linear(16, action_num)
+        self.fc3 = nn.Linear(16, action_num)
 
     def forward(self, some_state):
         
@@ -41,11 +36,7 @@ class QNet(nn.Module):
         a = t.relu(self.bn1(a))
         a = self.fc2(a)
         a = t.relu(self.bn2(a))
-        a = self.fc3(a)
-        a = t.relu(self.bn3(a))
-        a = self.fc4(a)
-        a = t.relu(self.bn4(a))
-        return self.fc5(a)
+        return self.fc3(a)
 
 S0 = 100
 
@@ -72,17 +63,13 @@ env_args = {
 env = DiscreteEnv2(**env_args)
 #drl_env, _ = env.get_sb_env()
 
-q_net = QNet(observe_dim, action_num)
-q_net_t = QNet(observe_dim, action_num)
-dqn = DQN(q_net, q_net_t,
-            t.optim.Adam,
-            nn.MSELoss(reduction='sum'),
-            visualize=False,
-            learning_rate=1e-4,
-            batch_size=1000,
-            discount=0.9,
-            gradient_max=1.0
-            )
+actor = Net(observe_dim, action_num)
+critic = Net(observe_dim, action_num)
+
+model = PPO(actor,critic,
+                t.optim.Adam,
+                nn.MSELoss(reduction='sum'),
+                visualize=False)
 
 episode, step, reward_fulfilled = 0, 0, 0
 smoothed_total_reward = 0
@@ -102,7 +89,7 @@ if __name__ == "__main__":
             with t.no_grad():
                 old_state = state
                 # agent model inference
-                action = dqn.act_discrete_with_noise(
+                action = model.act(
                     {"some_state": old_state}
                 )
                 state, reward, terminal, _ = env.step(action.item())
@@ -117,11 +104,11 @@ if __name__ == "__main__":
                     "terminal": terminal
                 })
 
-        dqn.store_episode(ep_list)
+        model.store_episode(ep_list)
         # update, update more if episode is longer, else less
-        if ((episode > 100) and (episode % 60 == 0)):
-            for _ in tqdm.tqdm(range(60*50)):
-                dqn.update()
+        if episode > 100:
+            for _ in range(step):
+                model.update()
 
         # show reward
         smoothed_total_reward = (smoothed_total_reward * 0.9 +
@@ -154,7 +141,7 @@ if __name__ == "__main__":
         with t.no_grad():
             old_state = state
             # agent model inference
-            action = dqn.act_discrete(
+            action = model.act_discrete(
                 {"some_state": old_state}
             )
             state, reward, terminal, info = env.step(action.item())
@@ -174,5 +161,5 @@ if __name__ == "__main__":
     generator = GBM_Generator(r = r, sigma = sigma, S0 = S0, freq = freq)
     env_args["generator"] = generator
     env_args["testing"] = True
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl_DQN(dqn, delta_agent, n_sim, env_args)
+    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl_DQN(model, delta_agent, n_sim, env_args)
     utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

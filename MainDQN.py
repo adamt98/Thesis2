@@ -15,8 +15,8 @@ import tqdm
 
 observe_dim = 3
 action_num = 101
-max_episodes = 2000
-solved_reward = -150
+max_episodes = 50000
+solved_reward = -100
 solved_repeat = 5
 
 
@@ -25,15 +25,15 @@ class QNet(nn.Module):
     def __init__(self, state_dim, action_num):
         super(QNet, self).__init__()
 
-        self.fc1 = nn.Linear(state_dim, 16)
-        self.bn1 = nn.LayerNorm(16)
-        self.fc2 = nn.Linear(16, 16)
-        self.bn2 = nn.LayerNorm(16)
-        self.fc3 = nn.Linear(16, 16)
-        self.bn3 = nn.LayerNorm(16)
-        self.fc4 = nn.Linear(16, 16)
-        self.bn4 = nn.LayerNorm(16)
-        self.fc5 = nn.Linear(16, action_num)
+        self.fc1 = nn.Linear(state_dim, 10)
+        self.bn1 = nn.LayerNorm(10, elementwise_affine=False)
+        self.fc2 = nn.Linear(10, 20)
+        self.bn2 = nn.LayerNorm(20, elementwise_affine=False)
+        self.fc3 = nn.Linear(20, 36)
+        self.bn3 = nn.LayerNorm(36, elementwise_affine=False)
+        # self.fc4 = nn.Linear(16, 16)
+        # self.bn4 = nn.LayerNorm(16)
+        self.fc5 = nn.Linear(36, action_num)
 
     def forward(self, some_state):
         
@@ -43,8 +43,8 @@ class QNet(nn.Module):
         a = t.relu(self.bn2(a))
         a = self.fc3(a)
         a = t.relu(self.bn3(a))
-        a = self.fc4(a)
-        a = t.relu(self.bn4(a))
+        # a = self.fc4(a)
+        # a = t.relu(self.bn4(a))
         return self.fc5(a)
 
 S0 = 100
@@ -57,7 +57,7 @@ freq = 0.2 # corresponds to trading freq of 5x per day
 ttm = 50
 kappa = 0.1
 cost_multiplier = 0.0
-gamma = 0.99
+gamma = 0.85
 
 generator = GBM_Generator(S0, r, sigma, freq)
 
@@ -72,6 +72,17 @@ env_args = {
 env = DiscreteEnv2(**env_args)
 #drl_env, _ = env.get_sb_env()
 
+# 1 epoch = 3000 episodes = 150k time-steps
+epoch = 150000
+batch_size = 32
+n_epochs_per_update = 5
+
+#n_updates = int(epoch * n_epochs_per_update / batch_size)
+
+final_eps = 0.05
+eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
+
+
 q_net = QNet(observe_dim, action_num)
 q_net_t = QNet(observe_dim, action_num)
 dqn = DQN(q_net, q_net_t,
@@ -79,15 +90,20 @@ dqn = DQN(q_net, q_net_t,
             nn.MSELoss(reduction='sum'),
             visualize=False,
             learning_rate=1e-4,
-            batch_size=1000,
-            discount=0.9,
-            gradient_max=1.0
+            batch_size=batch_size,
+            discount=gamma,
+            gradient_max=1.0,
+            epsilon_decay=eps_decay,
+            replay_size=750000,
+            update_rate=1.0,
+            #update_steps=50*100,
+            mode="fixed_target"
             )
 
 episode, step, reward_fulfilled = 0, 0, 0
 smoothed_total_reward = 0
 terminal = False
-
+eps = 1.0
 
 if __name__ == "__main__":
     while episode < max_episodes:
@@ -102,9 +118,13 @@ if __name__ == "__main__":
             with t.no_grad():
                 old_state = state
                 # agent model inference
+                
                 action = dqn.act_discrete_with_noise(
-                    {"some_state": old_state}
+                    {"some_state": old_state},
+                    use_target=True,
+                    decay_epsilon=True
                 )
+                eps = eps*dqn.epsilon_decay
                 state, reward, terminal, _ = env.step(action.item())
                 state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
                 total_reward += reward
@@ -118,10 +138,14 @@ if __name__ == "__main__":
                 })
 
         dqn.store_episode(ep_list)
-        # update, update more if episode is longer, else less
-        if ((episode > 100) and (episode % 60 == 0)):
-            for _ in tqdm.tqdm(range(60*50)):
-                dqn.update()
+        # update target net
+        if (episode > 500):
+            for _ in range(50):
+                dqn.update(update_value=True,update_target=False)
+
+        # one update of target net
+        if (episode % 3000 == 0):
+            dqn.update(update_value=False,update_target=True)
 
         # show reward
         smoothed_total_reward = (smoothed_total_reward * 0.9 +
@@ -155,7 +179,8 @@ if __name__ == "__main__":
             old_state = state
             # agent model inference
             action = dqn.act_discrete(
-                {"some_state": old_state}
+                {"some_state": old_state},
+                use_target=True
             )
             state, reward, terminal, info = env.step(action.item())
             state = t.tensor(state, dtype=t.float32).view(1, observe_dim)

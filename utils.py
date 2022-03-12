@@ -201,7 +201,8 @@ def simulate_pnl_DQN(model, model_delta, n_steps, env_kwargs, observe_dim=3):
                             old_state = state
                             # agent model inference
                             action = model.act_discrete(
-                                {"some_state": old_state}
+                                {"some_state": old_state},
+                                use_target=True
                             )
                             state, reward, terminal, info = env.step(action.item())
                             state = t.tensor(state, dtype=t.float32).view(1, observe_dim)

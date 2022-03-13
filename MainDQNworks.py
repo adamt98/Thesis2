@@ -15,9 +15,9 @@ import tqdm
 
 observe_dim = 3
 action_num = 101
-max_episodes = 50000
-solved_reward = -100
-solved_repeat = 5
+max_episodes = 10000
+solved_reward = -40
+solved_repeat = 7
 
 
 # model definition
@@ -45,7 +45,8 @@ class QNet(nn.Module):
         a = t.relu(self.bn3(a))
         # a = self.fc4(a)
         # a = t.relu(self.bn4(a))
-        return self.fc5(a)
+        a = self.fc5(a)
+        return a
 
 S0 = 100
 
@@ -89,7 +90,7 @@ dqn = DQN(q_net, q_net_t,
             t.optim.Adam,
             nn.MSELoss(reduction='sum'),
             visualize=False,
-            learning_rate=1e-4,
+            learning_rate=1e-5,
             batch_size=batch_size,
             discount=gamma,
             gradient_max=1.0,
@@ -111,14 +112,18 @@ if __name__ == "__main__":
         total_reward = 0
         terminal = False
         step = 0
-        state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
+
+        state = env.reset()
+        #state = [(state[0]-50)/50.0 , (state[1]-100)*2, (state[2]-25.0)/25.0] # experimental!!!!!!!!!!!
+        state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
         ep_list = []
         while not terminal:
             step += 1
             with t.no_grad():
                 old_state = state
                 # agent model inference
-                
+                if episode % 2 == 0 : decay_eps = True 
+                else: decay_eps = False
                 action = dqn.act_discrete_with_noise(
                     {"some_state": old_state},
                     use_target=True,
@@ -126,14 +131,17 @@ if __name__ == "__main__":
                 )
                 eps = eps*dqn.epsilon_decay
                 state, reward, terminal, _ = env.step(action.item())
-                state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
-                total_reward += reward
                 
+                total_reward += reward
+
+                clipped_reward = np.clip(reward,-10.0,10.0)
+
+                state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
                 ep_list.append({
                     "state": {"some_state": old_state},
                     "action": {"action": action},
                     "next_state": {"some_state": state},
-                    "reward": reward,
+                    "reward": clipped_reward,
                     "terminal": terminal
                 })
 
@@ -144,12 +152,12 @@ if __name__ == "__main__":
                 dqn.update(update_value=True,update_target=False)
 
         # one update of target net
-        if (episode % 3000 == 0):
+        if (episode % 1000 == 0):
             dqn.update(update_value=False,update_target=True)
 
         # show reward
-        smoothed_total_reward = (smoothed_total_reward * 0.9 +
-                                    total_reward * 0.1)
+        smoothed_total_reward = total_reward#(smoothed_total_reward * 0.9 +
+                                    #total_reward * 0.1)
         logger.info("Episode {} total reward={:.2f}"
                     .format(episode, smoothed_total_reward))
 
@@ -160,6 +168,23 @@ if __name__ == "__main__":
                 break
         else:
             reward_fulfilled = 0
+
+
+    # Sanity checks
+    # actions = []
+    # for ttm in np.arange(-1,1,1.0/25):
+    #     for holdings in np.arange(-1,1,1.0/50):
+    #         state = [holdings, 0.0, ttm]
+    #         state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
+    #         action = dqn.act_discrete(
+    #                 {"some_state": state},
+    #                 use_target=True
+    #             )
+    #         actions.append(action.item())
+
+    # plt.hist(actions)
+    # plt.show()
+
 
     # Testing
     generator = GBM_Generator(S0, r, sigma, freq, seed = 1234)

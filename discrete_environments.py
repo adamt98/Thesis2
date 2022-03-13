@@ -222,7 +222,9 @@ class DiscreteEnv2(gym.Env):
         if self.terminal:
             dic = self._out()
             df = pd.DataFrame(dic)
-            return self.state, reward, self.terminal, {"output":df}
+            # transform states
+            state = [(self.state[0]-50)/50.0 , (self.state[1]-100)*2, (self.state[2]-25.0)/25.0]
+            return state, reward, self.terminal, {"output":df}
 
         # Add everything to memory if we're in testing phase
         if self.testing:
@@ -235,7 +237,9 @@ class DiscreteEnv2(gym.Env):
             self.actions_memory.append(action)
             self.pnl_memory.append(- 100 * (new_option_value - old_option_value) + (self.state[1] - old_und_value) * self.state[0] - (self.cost - old_cost))
         
-        return self.state, reward, self.terminal, {"output":pd.DataFrame()}
+        # transform states
+        state = [(self.state[0]-50)/50.0 , (self.state[1]-100)*2, (self.state[2]-25.0)/25.0]
+        return state, reward, self.terminal, {"output":pd.DataFrame()}
 
     def _get_trading_cost(self, action):
         return self.cost_multiplier * (abs(action-self.state[0]) + 0.01 * ((action - self.state[0])**2))
@@ -280,7 +284,10 @@ class DiscreteEnv2(gym.Env):
         # Initiate state
         self.state = self._initiate_state()
         self.episode += 1
-        return self.state
+
+        # transform states
+        state = [(self.state[0]-50)/50.0 , (self.state[1]-100)*2, (self.state[2]-25.0)/25.0]
+        return state
 
     def reset_with_seed(self, seed):
         state = self.reset()

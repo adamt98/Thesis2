@@ -1,12 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from torch import maximum
 from tqdm import tqdm
 from IPython.utils import io
-import torch as t
 from discrete_environments import DiscreteEnv, DiscreteEnv2
-from agents import DRLAgent
 
 class EpsFunction():
     def __init__(self, total_steps):
@@ -147,10 +144,16 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     
     pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
 
-def simulate_pnl( model, model_delta, n_steps, isDRL, env_kwargs):
+def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func, env_switch):
     pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
 
-    env = DiscreteEnv(**env_kwargs)
+    if env_switch == 2:
+        env = DiscreteEnv2(**env_kwargs)
+    elif env_switch == 1:
+        env = DiscreteEnv(**env_kwargs)
+    else:
+        raise "env switch can be 1 or 2"
+    
     delta_env = DiscreteEnv(**env_kwargs)
     
     for i in tqdm(range(n_steps)):
@@ -160,91 +163,7 @@ def simulate_pnl( model, model_delta, n_steps, isDRL, env_kwargs):
             delta_env.reset_with_seed(11301*i) 
             with io.capture_output() as _:
                 if key == "model":
-                    if isDRL:
-                        df = DRLAgent.Prediction(
-                            model=model, 
-                            environment = env,
-                            pred_args = {"deterministic":True})
-
-                        df = df['output']
-
-                    else:
-                        df = model.test(env)
-                else:
-                    df = model_delta.test(delta_env)
-
-            pnl_paths_dict[key].append(df.pnl)
-            pnl_dict[key].append(df.pnl.cumsum().values[-1])
-            tcosts_dict[key].append(df.cost.values[-1])
-            ntrades_dict[key].append(df.trades.values[-1])
-
-    return pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict
-
-
-def simulate_pnl_DQN(model, model_delta, n_steps, env_kwargs, observe_dim=3):
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
-
-    env = DiscreteEnv2(**env_kwargs)
-    delta_env = DiscreteEnv(**env_kwargs)
-    
-    for i in tqdm(range(n_steps)):
-        for key in ["model","delta"]:
-            # Perform DRL testing
-            env.reset_with_seed(11301*i)
-            delta_env.reset_with_seed(11301*i) 
-            with io.capture_output() as _:
-                if key == "model":
-                    state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
-                    terminal = False
-                    while not terminal:
-                        with t.no_grad():
-                            old_state = state
-                            # agent model inference
-                            action = model.act_discrete(
-                                {"some_state": old_state},
-                                use_target=True
-                            )
-                            state, reward, terminal, info = env.step(action.item())
-                            state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
-                            
-                    df = info['output']
-                else:
-                    df = model_delta.test(delta_env)
-
-            pnl_paths_dict[key].append(df.pnl)
-            pnl_dict[key].append(df.pnl.cumsum().values[-1])
-            tcosts_dict[key].append(df.cost.values[-1])
-            ntrades_dict[key].append(df.trades.values[-1])
-
-    return pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict
-
-def simulate_pnl_PPO(model, model_delta, n_steps, env_kwargs, observe_dim=3):
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
-
-    env = DiscreteEnv2(**env_kwargs)
-    delta_env = DiscreteEnv(**env_kwargs)
-    
-    for i in tqdm(range(n_steps)):
-        for key in ["model","delta"]:
-            # Perform DRL testing
-            env.reset_with_seed(11301*i)
-            delta_env.reset_with_seed(11301*i) 
-            with io.capture_output() as _:
-                if key == "model":
-                    state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
-                    terminal = False
-                    while not terminal:
-                        with t.no_grad():
-                            old_state = state
-                            # agent model inference
-                            action = model.act(
-                                {"state": old_state},
-                                use_target=True
-                            )[0]
-                            state, reward, terminal, info = env.step(action.item())
-                            state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
-                            
-                    df = info['output']
+                    df = simulator_func(env)
                 else:
                     df = model_delta.test(delta_env)
 

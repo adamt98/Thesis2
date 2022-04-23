@@ -1,44 +1,47 @@
-from agents import ModelAverager, DeltaHedge, DRLAgent
-from discrete_environments import DiscreteEnv, DiscreteEnv2
-from data_generators import GBM_Generator, HestonGenerator
-import utils
-import numpy as np
-import matplotlib.pyplot as plt
-
-from machin.frame.algorithms import PPO
-from machin.frame.algorithms.ppo import PPO
-from machin.utils.logging import default_logger as logger
 import torch as t
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Categorical
-import gym
 
-from agents import ModelAverager, DeltaHedge, DRLAgent
+from models import DeltaHedge
 from discrete_environments import DiscreteEnv, DiscreteEnv2
 from data_generators import GBM_Generator, HestonGenerator
 import utils
 import numpy as np
-import matplotlib.pyplot as plt
 
 from machin.frame.algorithms import DQN
 from machin.frame.algorithms.dqn import DQN
 from machin.utils.logging import default_logger as logger
 import torch as t
 import torch.nn as nn
-import gym
-import tqdm
+
+from machin.frame.algorithms import PPO
+from machin.frame.algorithms.ppo import PPO
+from torch.distributions import Categorical
+
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.base import clone
+from discrete_environments import DiscreteEnv
+from tqdm import tqdm as tq
+import random
+import graphviz 
+from sklearn import tree
+from lineartree import LinearTreeRegressor
 
 from abc import ABC, abstractmethod
 
-# QNet model definition
+weights_dir = "./DQN_weights/"
+
+# QNet model
 class QNet(nn.Module):
     def __init__(self, state_dim, action_num, layers):
         super(QNet, self).__init__()
         self.n_layers = len(layers)
-        self.bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+        bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+        self.bn_layers = nn.ModuleList(bn_layers)
         layers = [state_dim] + layers + [action_num]
-        self.fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+        fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+        self.fc_layers = nn.ModuleList(fc_layers)
 
     def forward(self, some_state):
         a = self.fc_layers[0](some_state)
@@ -46,6 +49,80 @@ class QNet(nn.Module):
             a = t.relu(self.bn_layers[i](a))
             a = fc(a)
         return a
+
+# PPO Actor model
+class Actor(nn.Module):
+    def __init__(self, state_dim, action_num, layers):
+        super().__init__()
+        self.n_layers = len(layers)
+        bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+        self.bn_layers = nn.ModuleList(bn_layers)
+        layers = [state_dim] + layers + [action_num]
+        fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+        self.fc_layers = nn.ModuleList(fc_layers)
+
+    def forward(self, state, action=None):
+        a = self.fc_layers[0](state)
+        for i, fc in enumerate(self.fc_layers[1:]):
+            a = t.relu(self.bn_layers[i](a))
+            a = fc(a)
+
+        probs = t.softmax(a, dim=1)
+        dist = Categorical(probs=probs)
+        act = action if action is not None else dist.sample()
+        act_entropy = dist.entropy()
+        act_log_prob = dist.log_prob(act.flatten())
+        return act, act_log_prob, act_entropy
+
+# PPO Critic model
+class Critic(nn.Module):
+    def __init__(self, state_dim, layers):
+        super().__init__()
+
+        self.n_layers = len(layers)
+        bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+        self.bn_layers = nn.ModuleList(bn_layers)
+        layers = [state_dim] + layers + [1]
+        fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+        self.fc_layers = nn.ModuleList(fc_layers)
+
+    def forward(self, state):
+        a = self.fc_layers[0](state)
+        for i, fc in enumerate(self.fc_layers[1:]):
+            a = t.relu(self.bn_layers[i](a))
+            a = fc(a)
+        return a
+
+# Still to be migrated!!!
+class DeltaHedge():
+    
+    def __init__(self, r, sigma, K, call = True):
+        self.r = r
+        self.sigma = sigma
+        self.K = K
+        self.call = call
+    
+    def predict_action(self, state, env : DiscreteEnv):
+        holdings, spot, ttm = state[0], state[1], state[2]
+        
+        delta = env.generator.get_delta(spot, self.K, ttm)
+        
+        # compute actions
+        if self.call:
+            #return round(np.clip(100*delta - holdings, a_min = env.actions[0], a_max = env.actions[-1]))
+            return round(100*delta)
+        else:
+            return round(100*delta - 100)
+
+    def test(self, env : DiscreteEnv):
+        done = False
+        state = env.reset()
+        while not done:
+            action = self.predict_action(state, env)
+            state, _, terminal, info = env.step(action)
+            done = terminal
+
+        return info["output"]
 
 # Abstract model class
 class Model(ABC):
@@ -58,11 +135,149 @@ class Model(ABC):
     def test(self):
         pass
 
+class ModelAverager(Model):
+    def __init__(self, env : DiscreteEnv, gamma):
+        self.env = env
+        self.type = LinearTreeRegressor(base_estimator= LinearRegression(), max_depth=19, min_samples_leaf=100)
+        self.models = []
+        self.gamma = gamma
+
+    def reset(self):
+        self.models = []
+
+    def q_vals(self, X):
+        if len(self.models) == 0:
+            return np.full(X.shape[0], 4.0)
+        else:
+            #y = [model.predict(X) for model in self.models]
+            return self.models[-1].predict(X) #np.mean(y, axis = 0)
+
+    def consensus_q_vals(self, X):
+        if len(self.models) == 0:
+            return np.full(X.shape[0], 4.0)
+        else:
+            y = [model.predict(X) for model in self.models]
+            return np.mean(y, axis = 0)
+
+    # returns the best action according to consensus
+    def predict_action(self, state, env : DiscreteEnv =None):
+        if env is None:
+            env = self.env
+
+        appended = np.append(np.tile(state,(len(env.actions),1)), np.array(env.actions).reshape((-1,1)), axis=1)
+        evals = self.q_vals(appended)
+        # break ties randomly
+        actionIndex = np.random.choice(np.flatnonzero(evals == np.max(evals)))
+        return env.actions[actionIndex], evals[actionIndex]
+
+    def predict_random(self, env : DiscreteEnv = None):
+        if env is None: env = self.env
+        return random.choice(env.actions)
+
+    def train(self, n_steps, batches, eps_func):
+        self.reset()
+        for batch in range(batches):
+            
+            # roll out a single batch
+            states = []
+            actions = []
+            rewards = []
+
+            state = self.env.reset()
+            for i in tq(range(n_steps)):
+                # print info
+                # print("State: ", state)
+                # print("Option value: ", self.env.generator.get_option_value(100, state[-1]))
+                # predict action
+                rnd = random.random()
+                if rnd < eps_func(i) :
+                    action = self.predict_random()
+                    # print("random action: ", action)
+                else:
+                    action, _ = self.predict_action(state)
+                    # print("greedy action: ", action)
+
+                new_state, reward, terminal, _ = self.env.step(action)
+                # print("Reward = %d", reward)
+                # print("New state: ", new_state)
+                # print("New option value: ", self.env.generator.get_option_value(100, new_state[-1]))
+                # print("______________________")
+                actions.append(action)
+                rewards.append(reward)
+                states.append(state)
+
+                if terminal:
+                    state = self.env.reset()
+                else:
+                    state = new_state
+
+                # save the last state
+                if i == (n_steps - 1):
+                    states.append(state)
+                    action, _ = self.predict_action(state)
+                    actions.append(action)
+
+            # build x,y data
+            x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)#[np.append(state, action) for state, action in zip(states, actions)]
+            q_vals = self.consensus_q_vals(x[1:]) # don't use the first state-action pair
+            y = rewards + self.gamma * q_vals
+
+            # train the last model
+            self.models.append(clone(self.type))    
+            self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
+            del x
+            del q_vals
+            del y
+            # if batch == batches -1:
+            #     dot_data = tree.export_graphviz(fitted, out_file=None) 
+            #     graph = graphviz.Source(dot_data) 
+            #     graph.render("check") 
+            #     dot_data = tree.export_graphviz(fitted, out_file=None, 
+            #          feature_names=["holdings","price","ttm","action"],  
+            #          class_names=["q val"],  
+            #          filled=True, rounded=True,  
+            #          special_characters=True)  
+            #     graph = graphviz.Source(dot_data)  
+            #     return graph 
+
+    def simulator_func(self, env : DiscreteEnv):
+        done = False
+        state = env.reset()
+        while not done:
+            action, _ = self.predict_action(state, env)
+            # print(state)
+            # print(action)
+            state, _, terminal, info = env.step(action)
+            done = terminal
+
+        return info["output"]
+
+    def test(self, generator : GBM_Generator, env_args, n_sim):
+        
+        test_env = DiscreteEnv(**env_args)
+        test_env_delta = DiscreteEnv(**env_args)
+
+        df = self.simulator_func(test_env)
+
+        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
+        delta = delta_agent.test(test_env_delta)
+
+        utils.plot_decisions(delta, df)
+
+        utils.plot_pnl(delta, df)
+
+        generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
+        env_args["generator"] = generator
+        env_args["testing"] = True
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulator_func, 1)
+        utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+
 class DQN_Model(Model):
 
     def __init__(self,
                 observe_dim,
                 action_num,
+                layers,
                 epsilon_decay,
                 learning_rate=1e-5,
                 batch_size=32,
@@ -72,24 +287,28 @@ class DQN_Model(Model):
                 update_rate=1.0):
         
         self.observe_dim = observe_dim
-        q_net = QNet(observe_dim, action_num)
-        q_net_target = QNet(observe_dim, action_num)
-        self.dqn = DQN(q_net, q_net_target,
-                    t.optim.Adam,
-                    nn.MSELoss(reduction='sum'),
-                    visualize=False,
-                    learning_rate=learning_rate,
-                    batch_size=batch_size,
-                    discount=discount,
-                    gradient_max=gradient_max,
-                    epsilon_decay=epsilon_decay,
-                    replay_size=replay_size,
-                    update_rate=update_rate,
-                    mode="fixed_target"
-                    )
-        return 9
+        q_net = QNet(observe_dim, action_num, layers)
+        q_net_target = QNet(observe_dim, action_num, layers)
+        self.dqn = DQN(q_net, 
+                        q_net_target,
+                        t.optim.Adam,
+                        nn.MSELoss(reduction='sum'),
+                        visualize=False,
+                        learning_rate=learning_rate,
+                        batch_size=batch_size,
+                        discount=discount,
+                        gradient_max=gradient_max,
+                        epsilon_decay=epsilon_decay,
+                        replay_size=replay_size,
+                        update_rate=update_rate,
+                        mode="fixed_target"
+                        )
 
-    def train(self, max_episodes, env, solved_reward, solved_repeat):
+    def train(self, max_episodes, env, solved_reward, solved_repeat, load_weights, save_weights):
+
+        if load_weights:
+            self.dqn.load(weights_dir, {"qnet_target" : "qnt"})
+
         episode, step, reward_fulfilled = 0, 0, 0
         smoothed_total_reward = 0
         terminal = False
@@ -155,14 +374,17 @@ class DQN_Model(Model):
             else:
                 reward_fulfilled = 0
 
-    def simulate(self):
+        if save_weights:
+            self.dqn.save(weights_dir, {"qnet_target" : "qnt"}, version=0)
+
+    def simulate(self, env):
         state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
         terminal = False
         while not terminal:
             with t.no_grad():
                 old_state = state
                 # agent model inference
-                action = model.act_discrete(
+                action = self.dqn.act_discrete(
                     {"some_state": old_state},
                     use_target=True
                 )
@@ -171,17 +393,8 @@ class DQN_Model(Model):
                 
         return info['output']
 
-    def test(self):
-        # Testing
-        generator = GBM_Generator(S0, r, sigma, freq, seed = 1234)
-        env_args = {
-        "generator" : generator,
-        "ttm" : ttm,
-        "kappa" : kappa,
-        "cost_multiplier" : cost_multiplier,
-        "testing" : True
-        }
-
+    # dont forget to pass a deep copy of the env_args & generator
+    def test(self, generator : GBM_Generator, env_args, n_sim):
         env = DiscreteEnv2(**env_args)
         state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
         terminal = False
@@ -200,18 +413,138 @@ class DQN_Model(Model):
 
         # delta hedge benchmark
         test_env_delta = DiscreteEnv(**env_args)
-        delta_agent = DeltaHedge(r, sigma, S0)
+        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
         delta = delta_agent.test(test_env_delta)
 
         utils.plot_decisions(delta, df)
         utils.plot_pnl(delta, df)
 
-        n_sim = 300
-        generator = GBM_Generator(r = r, sigma = sigma, S0 = S0, freq = freq)
+        
+        generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
         
         env_args["generator"] = generator
         env_args["testing"] = True
-        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl_DQN(self.dqn, delta_agent, n_sim, env_args)
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate, 2)
         utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
 
-    
+class PPO_Model(Model):
+
+    def __init__(self, 
+                observe_dim, 
+                action_num, 
+                layers, 
+                learning_rate=1e-5,
+                batch_size=32,
+                discount=0.9,
+                gradient_max=1.0,
+                replay_size=750000):
+
+        self.observe_dim = observe_dim
+        self.actor = Actor(observe_dim, action_num, layers)
+        self.critic = Critic(observe_dim, layers)
+
+        self.model = PPO(self.actor, self.critic,
+                        t.optim.Adam,
+                        nn.MSELoss(reduction='sum'),
+                        visualize=False,
+                        learning_rate=learning_rate,
+                        batch_size=batch_size,
+                        discount=discount,
+                        gradient_max=gradient_max,
+                        replay_size=replay_size)
+
+    def train(self, max_episodes, env, solved_reward, solved_repeat):
+        episode, step, reward_fulfilled = 0, 0, 0
+        smoothed_total_reward = 0
+        terminal = False
+
+        while episode < max_episodes:
+            episode += 1
+            total_reward = 0
+            terminal = False
+            step = 0
+            state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
+            ep_list = []
+            while not terminal:
+                step += 1
+                with t.no_grad():
+                    old_state = state
+                    # agent model inference
+                    action = self.model.act(
+                        {"state": old_state}
+                    )[0] # THIS IS ADDED!!!
+
+                    state, reward, terminal, _ = env.step(action.item())
+                    state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
+                    total_reward += reward
+                    
+                    ep_list.append({
+                        "state": {"state": old_state},
+                        "action": {"action": action},
+                        "next_state": {"state": state},
+                        "reward": reward,
+                        "terminal": terminal
+                    })
+
+            self.model.store_episode(ep_list)
+            self.model.update()
+
+            # show reward
+            smoothed_total_reward = (smoothed_total_reward * 0.9 +
+                                        total_reward * 0.1)
+            logger.info("Episode {} total reward={:.2f}"
+                        .format(episode, smoothed_total_reward))
+
+            if smoothed_total_reward > solved_reward:
+                reward_fulfilled += 1
+                if reward_fulfilled >= solved_repeat:
+                    logger.info("Environment solved!")
+                    break
+            else:
+                reward_fulfilled = 0
+
+    def simulate(self, env):
+        state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
+        terminal = False
+        while not terminal:
+            with t.no_grad():
+                old_state = state
+                # agent model inference
+                action = self.model.act(
+                    {"state": old_state},
+                    use_target=True
+                )[0]
+                state, reward, terminal, info = env.step(action.item())
+                state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
+                
+        return info['output']
+
+    def test(self, generator : GBM_Generator, env_args, n_sim):
+        env = DiscreteEnv2(**env_args)
+        state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
+        terminal = False
+        while not terminal:
+            with t.no_grad():
+                old_state = state
+                # agent model inference
+                action = self.model.act(
+                    {"state": old_state}
+                )[0]
+                state, reward, terminal, info = env.step(action.item())
+                state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
+                
+        df = info['output']
+
+        # delta hedge benchmark
+        test_env_delta = DiscreteEnv(**env_args)
+        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
+        delta = delta_agent.test(test_env_delta)
+
+        utils.plot_decisions(delta, df)
+        utils.plot_pnl(delta, df)
+
+        generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
+        env_args["generator"] = generator
+        env_args["testing"] = True
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate, 2)
+        utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

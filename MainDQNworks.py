@@ -1,9 +1,10 @@
-from agents import ModelAverager, DeltaHedge, DRLAgent
 from discrete_environments import DiscreteEnv, DiscreteEnv2
 from data_generators import GBM_Generator, HestonGenerator
+from models import DeltaHedge
 import utils
 import numpy as np
 import matplotlib.pyplot as plt
+
 
 from machin.frame.algorithms import DQN
 from machin.frame.algorithms.dqn import DQN

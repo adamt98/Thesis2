@@ -4,6 +4,8 @@ import pandas as pd
 from tqdm import tqdm
 from IPython.utils import io
 from Environments import DiscreteEnv
+import os
+plots_dir = "./plots/"
 
 class EpsFunction():
     def __init__(self, total_steps):
@@ -26,6 +28,7 @@ def plot_decisions(delta, df):
     plt.plot(delta.option)
     plt.title("option value")
 
+    plt.savefig(plots_dir+"underlying_path.png")
     delta_holdings = delta.holdings.values 
     delta_actions = delta.actions.values 
     model_holdings = df.holdings.values
@@ -46,6 +49,7 @@ def plot_decisions(delta, df):
     plt.title("Actions")
     plt.legend()
 
+    plt.savefig(plots_dir+"decisions.png")
     plt.show()
 
 def plot_pnl(delta, df):
@@ -76,6 +80,7 @@ def plot_pnl(delta, df):
     plt.title("Num. of Trades")
     plt.legend()
 
+    plt.savefig(plots_dir+"pnl.png")
     plt.show()
 
 def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
@@ -88,6 +93,7 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plt.hist(pnl_dict["delta"], label="delta", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("PnL Histograms")
     plt.legend()
+    plt.savefig(plots_dir+"pnl_hist.png")
 
     # PnL paths graphs
     plt.figure(2, figsize=(18, 4))
@@ -101,7 +107,7 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     for i in range(len(pnl_dict["delta"])):
         plt.plot(pnl_paths_dict["delta"][i].cumsum().values, color='r', alpha=0.4)
     plt.title("PnL paths Delta Hedge")
-
+    plt.savefig(plots_dir+"pnl_paths.png")
 
     # Trades and Costs histograms
     plt.figure(3, figsize=(12, 6))
@@ -123,6 +129,7 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plt.hist(ntrades_dict["delta"], label = "Delta Hedge", bins = np.arange(minimum, maximum + binwidth, binwidth))
     plt.title("Number of trades histogram")
     plt.legend()
+    plt.savefig(plots_dir+"ntrades_cost_hist.png")
 
     model_pnl_std = []
     delta_pnl_std = []
@@ -140,9 +147,11 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plt.title("Histograms: Standard Deviation of PnL")
     plt.legend()
 
+    plt.savefig(plots_dir+"std_hist.png")
     plt.show()
     
-    pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
+    plot1 = pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
+    plot1.get_figure().savefig(plots_dir+"std_density.png")
 
 def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func):
     pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}

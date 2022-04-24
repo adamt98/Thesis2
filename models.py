@@ -422,10 +422,15 @@ class PPO_Model(Model):
                         gradient_max=gradient_max,
                         replay_size=replay_size)
 
-    def train(self, max_episodes, env, solved_reward, solved_repeat):
+    def train(self, max_episodes, env, solved_reward, solved_repeat, load_weights, save_weights):
         episode, step, reward_fulfilled = 0, 0, 0
         smoothed_total_reward = 0
         terminal = False
+
+        if load_weights:
+            self.model.load(weights_dir, 
+                            {"restorable_model_1": "actor",
+                            "restorable_model_2": "critic"})
 
         while episode < max_episodes:
             episode += 1
@@ -471,6 +476,11 @@ class PPO_Model(Model):
                     break
             else:
                 reward_fulfilled = 0
+
+        if save_weights:
+            self.model.save(weights_dir, 
+                            {"restorable_model_1": "actor",
+                            "restorable_model_2": "critic"})
 
     def simulate(self, env):
         state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)

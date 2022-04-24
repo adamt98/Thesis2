@@ -1,11 +1,10 @@
-import numpy as np
-import pandas as pd
 from Generators import GBM_Generator
 
+import numpy as np
+import pandas as pd
 import gym
 from gym import spaces
 from stable_baselines3.common.vec_env import DummyVecEnv
-
 
 class DiscreteEnv(gym.Env):
 

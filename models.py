@@ -1,32 +1,28 @@
-import torch as t
-import torch.nn as nn
-
 from Environments import DiscreteEnv
 from Generators import GBM_Generator, HestonGenerator
 import Utils
+
+import random
+import graphviz 
 import numpy as np
+from tqdm import tqdm as tq
+from abc import ABC, abstractmethod
+
+import torch as t
+import torch.nn as nn
+from torch.distributions import Categorical
 
 from machin.frame.algorithms import DQN
 from machin.frame.algorithms.dqn import DQN
-from machin.utils.logging import default_logger as logger
-import torch as t
-import torch.nn as nn
-
 from machin.frame.algorithms import PPO
 from machin.frame.algorithms.ppo import PPO
-from torch.distributions import Categorical
+from machin.utils.logging import default_logger as logger
 
-import numpy as np
 from sklearn.linear_model import LinearRegression
+from sklearn import tree
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.base import clone
-from tqdm import tqdm as tq
-import random
-import graphviz 
-from sklearn import tree
 from lineartree import LinearTreeRegressor
-
-from abc import ABC, abstractmethod
 
 weights_dir = "./DQN_weights/"
 

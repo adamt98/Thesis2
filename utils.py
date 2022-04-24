@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from IPython.utils import io
-from discrete_environments import DiscreteEnv, DiscreteEnv2
+from Environments import DiscreteEnv
 
 class EpsFunction():
     def __init__(self, total_steps):
@@ -144,28 +144,19 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     
     pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
 
-def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func, env_switch):
+def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func):
     pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
-
-    if env_switch == 2:
-        env = DiscreteEnv2(**env_kwargs)
-    elif env_switch == 1:
-        env = DiscreteEnv(**env_kwargs)
-    else:
-        raise "env switch can be 1 or 2"
-    
-    delta_env = DiscreteEnv(**env_kwargs)
+    env = DiscreteEnv(**env_kwargs)
     
     for i in tqdm(range(n_steps)):
         for key in ["model","delta"]:
             # Perform DRL testing
             env.reset_with_seed(11301*i)
-            delta_env.reset_with_seed(11301*i) 
             with io.capture_output() as _:
                 if key == "model":
                     df = simulator_func(env)
                 else:
-                    df = model_delta.test(delta_env)
+                    df = model_delta.test(env)
 
             pnl_paths_dict[key].append(df.pnl)
             pnl_dict[key].append(df.pnl.cumsum().values[-1])

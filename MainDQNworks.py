@@ -1,7 +1,7 @@
-from discrete_environments import DiscreteEnv, DiscreteEnv2
-from data_generators import GBM_Generator, HestonGenerator
-from models import DeltaHedge
-import utils
+from Environments import DiscreteEnv
+from Generators import GBM_Generator, HestonGenerator
+from Models import DeltaHedge
+import Utils
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -16,7 +16,7 @@ import tqdm
 
 observe_dim = 3
 action_num = 101
-max_episodes = 10000
+max_episodes = 100
 solved_reward = -40
 solved_repeat = 7
 
@@ -71,7 +71,7 @@ env_args = {
     "testing" : False
 }
 
-env = DiscreteEnv2(**env_args)
+env = DiscreteEnv(**env_args)
 #drl_env, _ = env.get_sb_env()
 
 # 1 epoch = 3000 episodes = 150k time-steps
@@ -106,6 +106,22 @@ episode, step, reward_fulfilled = 0, 0, 0
 smoothed_total_reward = 0
 terminal = False
 eps = 1.0
+
+def simulator_func(env):
+    state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
+    terminal = False
+    while not terminal:
+        with t.no_grad():
+            old_state = state
+            # agent model inference
+            action = dqn.act_discrete(
+                {"some_state": old_state},
+                use_target=True
+            )
+            state, reward, terminal, info = env.step(action.item())
+            state = t.tensor(state, dtype=t.float32).view(1, observe_dim)
+            
+    return info['output']
 
 if __name__ == "__main__":
     while episode < max_episodes:
@@ -197,7 +213,7 @@ if __name__ == "__main__":
     "testing" : True
     }
 
-    env = DiscreteEnv2(**env_args)
+    env = DiscreteEnv(**env_args)
     state = t.tensor(env.reset(), dtype=t.float32).view(1, observe_dim)
     terminal = False
     while not terminal:
@@ -215,15 +231,15 @@ if __name__ == "__main__":
 
     # delta hedge benchmark
     test_env_delta = DiscreteEnv(**env_args)
-    delta_agent = DeltaHedge(r, sigma, S0)
+    delta_agent = DeltaHedge(S0)
     delta = delta_agent.test(test_env_delta)
 
-    utils.plot_decisions(delta, df)
-    utils.plot_pnl(delta, df)
+    Utils.plot_decisions(delta, df)
+    Utils.plot_pnl(delta, df)
 
     n_sim = 300
     generator = GBM_Generator(r = r, sigma = sigma, S0 = S0, freq = freq)
     env_args["generator"] = generator
     env_args["testing"] = True
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl_DQN(dqn, delta_agent, n_sim, env_args)
-    utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, env_args, simulator_func)
+    Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

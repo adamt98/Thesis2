@@ -1,10 +1,9 @@
 import torch as t
 import torch.nn as nn
 
-from models import DeltaHedge
-from discrete_environments import DiscreteEnv, DiscreteEnv2
-from data_generators import GBM_Generator, HestonGenerator
-import utils
+from Environments import DiscreteEnv
+from Generators import GBM_Generator, HestonGenerator
+import Utils
 import numpy as np
 
 from machin.frame.algorithms import DQN
@@ -21,7 +20,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.base import clone
-from discrete_environments import DiscreteEnv
 from tqdm import tqdm as tq
 import random
 import graphviz 
@@ -93,37 +91,6 @@ class Critic(nn.Module):
             a = fc(a)
         return a
 
-# Still to be migrated!!!
-class DeltaHedge():
-    
-    def __init__(self, r, sigma, K, call = True):
-        self.r = r
-        self.sigma = sigma
-        self.K = K
-        self.call = call
-    
-    def predict_action(self, state, env : DiscreteEnv):
-        holdings, spot, ttm = state[0], state[1], state[2]
-        
-        delta = env.generator.get_delta(spot, self.K, ttm)
-        
-        # compute actions
-        if self.call:
-            #return round(np.clip(100*delta - holdings, a_min = env.actions[0], a_max = env.actions[-1]))
-            return round(100*delta)
-        else:
-            return round(100*delta - 100)
-
-    def test(self, env : DiscreteEnv):
-        done = False
-        state = env.reset()
-        while not done:
-            action = self.predict_action(state, env)
-            state, _, terminal, info = env.step(action)
-            done = terminal
-
-        return info["output"]
-
 # Abstract model class
 class Model(ABC):
  
@@ -134,6 +101,33 @@ class Model(ABC):
     @abstractmethod
     def test(self):
         pass
+
+# Delta Hedging benchmark
+class DeltaHedge(Model):
+    
+    def __init__(self, K, call = True):
+        self.K = K
+        self.call = call
+    
+    def train(self):
+        pass
+
+    def predict_action(self, state, env : DiscreteEnv):
+        _, spot, ttm = env.denormalize_state(state)
+        delta = env.generator.get_delta(spot, self.K, ttm)
+        shares = round(100*delta)
+        if self.call: return shares 
+        else: return shares - 100
+
+    def test(self, env : DiscreteEnv):
+        done = False
+        state = env.reset()
+        while not done:
+            action = self.predict_action(state, env)
+            state, _, terminal, info = env.step(action)
+            done = terminal
+
+        return info["output"]
 
 class ModelAverager(Model):
     def __init__(self, env : DiscreteEnv, gamma):
@@ -183,31 +177,23 @@ class ModelAverager(Model):
             actions = []
             rewards = []
 
-            state = self.env.reset()
+            state = self.env.denormalize_state(self.env.reset())
             for i in tq(range(n_steps)):
-                # print info
-                # print("State: ", state)
-                # print("Option value: ", self.env.generator.get_option_value(100, state[-1]))
-                # predict action
                 rnd = random.random()
                 if rnd < eps_func(i) :
                     action = self.predict_random()
-                    # print("random action: ", action)
                 else:
                     action, _ = self.predict_action(state)
-                    # print("greedy action: ", action)
 
                 new_state, reward, terminal, _ = self.env.step(action)
-                # print("Reward = %d", reward)
-                # print("New state: ", new_state)
-                # print("New option value: ", self.env.generator.get_option_value(100, new_state[-1]))
-                # print("______________________")
+                new_state = self.env.denormalize_state(new_state)
+
                 actions.append(action)
                 rewards.append(reward)
                 states.append(state)
 
                 if terminal:
-                    state = self.env.reset()
+                    state = self.env.denormalize_state(self.env.reset())
                 else:
                     state = new_state
 
@@ -218,16 +204,13 @@ class ModelAverager(Model):
                     actions.append(action)
 
             # build x,y data
-            x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)#[np.append(state, action) for state, action in zip(states, actions)]
+            x = np.append(np.array(states).reshape((-1, 3)), np.array(actions).reshape((-1,1)), axis=1)
             q_vals = self.consensus_q_vals(x[1:]) # don't use the first state-action pair
             y = rewards + self.gamma * q_vals
 
             # train the last model
             self.models.append(clone(self.type))    
             self.models[-1].fit(x[:-1],y) # don't use the last state-action pair
-            del x
-            del q_vals
-            del y
             # if batch == batches -1:
             #     dot_data = tree.export_graphviz(fitted, out_file=None) 
             #     graph = graphviz.Source(dot_data) 
@@ -239,15 +222,19 @@ class ModelAverager(Model):
             #          special_characters=True)  
             #     graph = graphviz.Source(dot_data)  
             #     return graph 
+            del x
+            del q_vals
+            del y
 
     def simulator_func(self, env : DiscreteEnv):
         done = False
-        state = env.reset()
+        state = env.denormalize_state(env.reset())
         while not done:
             action, _ = self.predict_action(state, env)
             # print(state)
             # print(action)
             state, _, terminal, info = env.step(action)
+            state = env.denormalize_state(state)
             done = terminal
 
         return info["output"]
@@ -255,22 +242,21 @@ class ModelAverager(Model):
     def test(self, generator : GBM_Generator, env_args, n_sim):
         
         test_env = DiscreteEnv(**env_args)
-        test_env_delta = DiscreteEnv(**env_args)
-
         df = self.simulator_func(test_env)
-
-        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
+        
+        test_env_delta = DiscreteEnv(**env_args)    
+        delta_agent = DeltaHedge(generator.initial)
         delta = delta_agent.test(test_env_delta)
 
-        utils.plot_decisions(delta, df)
+        Utils.plot_decisions(delta, df)
 
-        utils.plot_pnl(delta, df)
+        Utils.plot_pnl(delta, df)
 
         generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
         env_args["generator"] = generator
         env_args["testing"] = True
-        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulator_func, 1)
-        utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulator_func)
+        Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
 
 class DQN_Model(Model):
 
@@ -395,37 +381,24 @@ class DQN_Model(Model):
 
     # dont forget to pass a deep copy of the env_args & generator
     def test(self, generator : GBM_Generator, env_args, n_sim):
-        env = DiscreteEnv2(**env_args)
-        state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
-        terminal = False
-        while not terminal:
-            with t.no_grad():
-                old_state = state
-                # agent model inference
-                action = self.dqn.act_discrete(
-                    {"some_state": old_state},
-                    use_target=True
-                )
-                state, reward, terminal, info = env.step(action.item())
-                state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
-                
-        df = info['output']
+        env = DiscreteEnv(**env_args)
+        df = self.simulate(env)
 
         # delta hedge benchmark
         test_env_delta = DiscreteEnv(**env_args)
-        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
+        delta_agent = DeltaHedge(generator.initial)
         delta = delta_agent.test(test_env_delta)
 
-        utils.plot_decisions(delta, df)
-        utils.plot_pnl(delta, df)
+        Utils.plot_decisions(delta, df)
+        Utils.plot_pnl(delta, df)
 
         
         generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
         
         env_args["generator"] = generator
         env_args["testing"] = True
-        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate, 2)
-        utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate)
+        Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
 
 class PPO_Model(Model):
 
@@ -520,31 +493,19 @@ class PPO_Model(Model):
         return info['output']
 
     def test(self, generator : GBM_Generator, env_args, n_sim):
-        env = DiscreteEnv2(**env_args)
-        state = t.tensor(env.reset(), dtype=t.float32).view(1, self.observe_dim)
-        terminal = False
-        while not terminal:
-            with t.no_grad():
-                old_state = state
-                # agent model inference
-                action = self.model.act(
-                    {"state": old_state}
-                )[0]
-                state, reward, terminal, info = env.step(action.item())
-                state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
-                
-        df = info['output']
+        env = DiscreteEnv(**env_args)
+        df = self.simulate(env)
 
         # delta hedge benchmark
         test_env_delta = DiscreteEnv(**env_args)
-        delta_agent = DeltaHedge(generator.r, generator.sigma, generator.initial)
+        delta_agent = DeltaHedge(generator.initial)
         delta = delta_agent.test(test_env_delta)
 
-        utils.plot_decisions(delta, df)
-        utils.plot_pnl(delta, df)
+        Utils.plot_decisions(delta, df)
+        Utils.plot_pnl(delta, df)
 
         generator = GBM_Generator(r = generator.r, sigma = generator.sigma, S0 = generator.initial, freq = generator.freq)
         env_args["generator"] = generator
         env_args["testing"] = True
-        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate, 2)
-        utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+        pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, env_args, self.simulate)
+        Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

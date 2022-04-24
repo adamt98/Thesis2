@@ -1,6 +1,6 @@
-from discrete_environments import DiscreteEnv, DiscreteEnv2
-from data_generators import GBM_Generator, HestonGenerator
-import utils
+from Environments import DiscreteEnv
+from Generators import GBM_Generator, HestonGenerator
+import Utils
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -41,7 +41,7 @@ env_args = {
     "testing" : False
 }
 
-env = DiscreteEnv2(**env_args)
+env = DiscreteEnv(**env_args)
 #drl_env, _ = env.get_sb_env()
 
 # 1 epoch = 3000 episodes = 150k time-steps
@@ -53,7 +53,7 @@ n_epochs_per_update = 5
 final_eps = 0.05
 eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
 
-import models
+import Models
 
 layers = [8, 16, 32, 64]
 
@@ -71,32 +71,8 @@ layers = [8, 16, 32, 64]
 # plt.show()
 
 if __name__ == "__main__":
-    # dqn = models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=0.00001, batch_size=batch_size, discount=0.9)
-    # dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat)
-
-    # generator = GBM_Generator(S0, r, sigma, freq)
-    # env_args = {
-    #     "generator" : generator,
-    #     "ttm" : ttm,
-    #     "kappa" : kappa,
-    #     "cost_multiplier" : cost_multiplier,
-    #     "testing" : True
-    # }
-    # dqn.test(generator=generator, env_args=env_args, n_sim=300)
-
-    ## TESTING PPO
-    env_args = {
-        "generator" : generator,
-        "ttm" : ttm,
-        "kappa" : kappa,
-        "cost_multiplier" : cost_multiplier,
-        "testing" : False
-    }
-
-    env = DiscreteEnv2(**env_args)
-
-    ppo = models.PPO_Model(observe_dim, action_num, layers, learning_rate=0.00001, batch_size=batch_size, discount=0.9)
-    ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat)
+    dqn = Models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=0.00001, batch_size=batch_size, discount=0.9)
+    dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=False)
 
     generator = GBM_Generator(S0, r, sigma, freq)
     env_args = {
@@ -106,8 +82,32 @@ if __name__ == "__main__":
         "cost_multiplier" : cost_multiplier,
         "testing" : True
     }
+    dqn.test(generator=generator, env_args=env_args, n_sim=30)
 
-    ppo.test(generator=generator, env_args=env_args, n_sim=30)
+    ## TESTING PPO
+    # env_args = {
+    #     "generator" : generator,
+    #     "ttm" : ttm,
+    #     "kappa" : kappa,
+    #     "cost_multiplier" : cost_multiplier,
+    #     "testing" : False
+    # }
+
+    # env = DiscreteEnv(**env_args)
+
+    # ppo = Models.PPO_Model(observe_dim, action_num, layers, learning_rate=0.00001, batch_size=batch_size, discount=0.9)
+    # ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat)
+
+    # generator = GBM_Generator(S0, r, sigma, freq)
+    # env_args = {
+    #     "generator" : generator,
+    #     "ttm" : ttm,
+    #     "kappa" : kappa,
+    #     "cost_multiplier" : cost_multiplier,
+    #     "testing" : True
+    # }
+
+    # ppo.test(generator=generator, env_args=env_args, n_sim=30)
 
 
 
@@ -115,11 +115,11 @@ if __name__ == "__main__":
     # n_steps = 500
     # n_batches = 3
 
-    # eps_func = utils.EpsFunction(n_steps).get_func()
+    # eps_func = Utils.EpsFunction(n_steps).get_func()
 
     # env = DiscreteEnv(**env_args)
     # drl_env, _ = env.get_sb_env()
-    # agent = models.ModelAverager(env, gamma)
+    # agent = Models.ModelAverager(env, gamma)
 
 
     # agent.train(n_steps, n_batches, eps_func)

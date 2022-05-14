@@ -1,0 +1,4 @@
+*.pyc
+__pycache__/*
+plots/*.png
+DQN_weights/*

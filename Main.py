@@ -23,6 +23,7 @@ env_args = {
     "ttm" : ttm,
     "kappa" : kappa,
     "cost_multiplier" : cost_multiplier,
+    "reward_type" : "basic",
     "testing" : False
 }
 
@@ -33,9 +34,9 @@ env = DiscreteEnv(**env_args)
 
 observe_dim = 3
 action_num = 101
-solved_reward = -40
+solved_reward = 0
 solved_repeat = 7
-max_episodes = 30
+max_episodes = 5000
 
 # 1 epoch = 3000 episodes = 150k time-steps
 epoch = 150000
@@ -46,10 +47,10 @@ n_epochs_per_update = 5
 final_eps = 0.05
 eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
 
-layers = [8, 16, 32, 64]
-learning_rate = 0.00001
+layers = [16, 32, 32, 64]
+learning_rate = 1e-5
 
-n_sim = 30
+n_sim = 300
 
 ## Model Averager setup
 n_steps = 500
@@ -67,28 +68,14 @@ if __name__ == "__main__":
     #     "ttm" : ttm,
     #     "kappa" : kappa,
     #     "cost_multiplier" : cost_multiplier,
+    #     "reward_type" : "basic",
     #     "testing" : True
     # }
     # dqn.test(generator=generator, env_args=env_args, n_sim=n_sim)
 
     ## TESTING PPO
-    # ppo = Models.PPO_Model(observe_dim, action_num, layers, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
-    # ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat)
-
-    # generator = GBM_Generator(S0, r, sigma, freq)
-    # env_args = {
-    #     "generator" : generator,
-    #     "ttm" : ttm,
-    #     "kappa" : kappa,
-    #     "cost_multiplier" : cost_multiplier,
-    #     "testing" : True
-    # }
-
-    # ppo.test(generator=generator, env_args=env_args, n_sim=n_sim)
-
-    ## TESTING MODEL AVERAGER
-    agent = Models.ModelAverager(env, discount)
-    agent.train(n_steps, n_batches, eps_func)
+    ppo = Models.PPO_Model(observe_dim, action_num, layers, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
+    ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
 
     generator = GBM_Generator(S0, r, sigma, freq)
     env_args = {
@@ -96,6 +83,23 @@ if __name__ == "__main__":
         "ttm" : ttm,
         "kappa" : kappa,
         "cost_multiplier" : cost_multiplier,
+        "reward_type" : "basic",
         "testing" : True
     }
-    agent.test(generator, env_args, n_sim=n_sim)
+
+    ppo.test(generator=generator, env_args=env_args, n_sim=n_sim)
+
+    ## TESTING MODEL AVERAGER
+    # agent = Models.ModelAverager(env, discount)
+    # agent.train(n_steps, n_batches, eps_func)
+
+    # generator = GBM_Generator(S0, r, sigma, freq)
+    # env_args = {
+    #     "generator" : generator,
+    #     "ttm" : ttm,
+    #     "kappa" : kappa,
+    #     "cost_multiplier" : cost_multiplier,
+    #     "reward_type" : "basic",
+    #     "testing" : True
+    # }
+    # agent.test(generator, env_args, n_sim=n_sim)

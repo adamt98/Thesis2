@@ -1,5 +1,5 @@
 from Generators import GBM_Generator
-
+from Reward import Reward
 import numpy as np
 import pandas as pd
 import gym
@@ -13,7 +13,8 @@ class DiscreteEnv(gym.Env):
                 ttm,
                 kappa = 0.1,
                 cost_multiplier = 0.5,
-                testing = False):
+                testing = False,
+                reward_type = "basic"):
         
         # Init some constants
         self.expiry = ttm
@@ -25,6 +26,8 @@ class DiscreteEnv(gym.Env):
         self.episode = 0
         self.K = generator.current # ATM
         self.cost_multiplier = cost_multiplier
+        self._reward_class = Reward(kappa)
+        self.reward_func = self._reward_class.get_reward_func(reward_type)
 
         self.generator = generator
         
@@ -79,10 +82,11 @@ class DiscreteEnv(gym.Env):
         new_option_value = self.generator.get_option_value(self.K, self.state[-1])
         
         # Calculate reward
-        reward = self._get_reward(new_option_value, old_option_value, 
+        reward = self.reward_func(new_option_value, old_option_value, 
                                         new_und = self.state[1], 
                                         old_und = old_und_value, 
-                                        trading_cost = self.cost - old_cost)
+                                        trading_cost = self.cost - old_cost,
+                                        holdings= self.state[0])
 
         if self.terminal:
             dic = self._out()
@@ -108,10 +112,6 @@ class DiscreteEnv(gym.Env):
 
     def _get_trading_cost(self, action):
         return self.cost_multiplier * (abs(action-self.state[0]) + 0.01 * ((action - self.state[0])**2))
-
-    def _get_reward(self, new_opt_val, old_opt_val, new_und, old_und, trading_cost):
-        pnl = - 100 * (new_opt_val - old_opt_val) + (new_und - old_und) * self.state[0]
-        return ( pnl - 0.5 * self.kappa * (pnl**2) ) - trading_cost
     
     def _out(self):
         if self.testing:

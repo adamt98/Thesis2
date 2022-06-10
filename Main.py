@@ -4,6 +4,7 @@ from Generators import GBM_Generator
 import Models
 import Utils
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 ##### Environment config ###############
@@ -13,7 +14,7 @@ r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 # corresponds to trading freq of 5x per day
 ttm = 50
-kappa = 0.1
+kappa = 0.0
 cost_multiplier = 0.0
 discount = 0.85
 
@@ -34,9 +35,9 @@ env = DiscreteEnv(**env_args)
 
 observe_dim = 3
 action_num = 101
-solved_reward = 0
+solved_reward = 550
 solved_repeat = 7
-max_episodes = 5000
+max_episodes = 15000
 
 # 1 epoch = 3000 episodes = 150k time-steps
 epoch = 150000
@@ -47,7 +48,7 @@ n_epochs_per_update = 5
 final_eps = 0.05
 eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
 
-layers = [16, 32, 32, 64]
+layers = [16, 32, 32, 32]
 learning_rate = 1e-5
 
 n_sim = 300
@@ -60,7 +61,7 @@ eps_func = Utils.EpsFunction(n_steps).get_func()
 if __name__ == "__main__":
     ## TESTING DQN
     # dqn = Models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
-    # dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=False)
+    # dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
 
     # generator = GBM_Generator(S0, r, sigma, freq)
     # env_args = {
@@ -103,3 +104,22 @@ if __name__ == "__main__":
     #     "testing" : True
     # }
     # agent.test(generator, env_args, n_sim=n_sim)
+
+    # gen = GBM_Generator(100.0, 0.0, 0.2, 1, None, 80.0)
+    # und = []
+    # opt = []
+    # bar = []
+    
+    # for i in range(50):
+    #     #und.append(gen.current)
+    #     bar.append(gen.get_DIP_vega(spot = 60.0 + i, K = 100.0, ttm = 5))
+    #     opt.append(gen.get_vega(spot = 60.0 + i, K = 80.0, ttm = 5) )
+    #     #gen.get_next()
+
+    # plt.figure(1, figsize=(12, 8))
+    # # plt.subplot(121)
+    # # plt.plot(und)
+    # # plt.subplot(122)
+    # plt.plot(opt)
+    # plt.plot(bar)
+    # plt.show()

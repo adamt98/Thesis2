@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import random
 from random import gauss
-from math import sqrt, exp
+from math import log, sqrt, exp
 from scipy.stats import norm
 
 class GBM_Generator:
@@ -35,6 +35,7 @@ class GBM_Generator:
         self.freq = freq # e.g. freq = 0.5 for trading twice a day
         self.dt = (1.0 / self.T) * freq # time increment
         self.H = barrier
+        self.is_knocked = False
         if seed is not None:
             random.seed(seed)
         
@@ -69,7 +70,7 @@ class GBM_Generator:
         
         return value
 
-    def get_barrier_value(self, K, ttm, up, out, is_knocked = False, call = True):
+    def get_barrier_value(self, K, ttm, up, out, call = True):
         """
         Calculates down & in barrier call/put price under current GBM dynamics.
         
@@ -78,6 +79,14 @@ class GBM_Generator:
             - ttm  = time to maturity in periods
             - call = True/False, whether it's a call or a put
         """
+        if self.is_knocked:
+            is_knocked = True
+        elif (up and (self.current > self.H)) or ((not up) and (self.current < self.H)):
+            self.is_knocked = True
+            is_knocked = True
+        else:
+            is_knocked = False
+
         if is_knocked:
             if out:
                 return 0.0
@@ -170,10 +179,77 @@ class GBM_Generator:
                     else: return down_in_put
         
     
+    def get_DIP_delta(self, spot, K, ttm):
+        if spot < self.H:
+            is_knocked = True
+        elif self.is_knocked:
+            is_knocked = True
+        else:
+            is_knocked = False
+
+        if is_knocked:
+            return self.get_delta(spot, K, ttm) - 1
+
+        ttm = ttm * self.dt # adjusting to annual terms
+        _lambda = 0.5 + self.r / (self.sigma ** 2)
+        c = 1 / ( self.sigma * sqrt(ttm))
+        y = _lambda * (1 / c) + c * log(self.H ** 2 / (spot * K))
+        y1 = _lambda * (1 / c) + c * log(self.H / spot)
+        x1 = _lambda * (1 / c) + c * log(spot / self.H)
+        dfK = K * exp(-self.r * ttm)
+        HS = self.H / spot
+        
+
+        delta = - norm.cdf(-x1) + c * norm.pdf(-x1) - dfK * c * (1 / spot) * norm.pdf(1 / c - x1) \
+                + (1 - 2 * _lambda) * (HS ** (2 * _lambda)) * (norm.cdf(y) - norm.cdf(y1)) \
+                + (HS ** (2 * _lambda)) * c * (norm.pdf(y1) - norm.pdf(y)) \
+                + (2 * _lambda - 2) * dfK * (HS ** (2 * _lambda - 1)) * (1 / self.H) * (norm.cdf(y - 1 / c) - norm.cdf(y1 - 1 / c)) \
+                - dfK * (HS ** (2 * _lambda - 2)) * c * (1 / spot) * (norm.pdf(y1 - 1 / c) - norm.pdf(y - 1 / c))
+
+        return delta
+
     def get_delta(self, spot, K, ttm):
         ttm = ttm * self.dt # adjusting to annual terms
         d1 = (np.log(spot/K) + (self.r + self.sigma**2/2) * ttm ) / (self.sigma * sqrt(ttm))
         return norm.cdf(d1)
+
+    def get_vega(self, spot, K, ttm):
+        ttm = ttm * self.dt
+        d1 = (np.log(spot/K) + (self.r + self.sigma**2/2) * ttm ) / (self.sigma * sqrt(ttm))
+        dd1 = sqrt(ttm) / 2 - (np.log(spot/K) + self.r * ttm) / (sqrt(ttm) * self.sigma ** 2)
+        return spot * sqrt(ttm) * norm.pdf(d1)
+
+    def get_DIP_vega(self, spot, K, ttm):
+        if spot < self.H:
+            is_knocked = True
+        elif self.is_knocked:
+            is_knocked = True
+        else:
+            is_knocked = False
+
+        if is_knocked:
+            return self.get_vega(spot, K, ttm)
+
+        ttm = ttm * self.dt # adjusting to annual terms
+        _lambda = 0.5 + self.r / (self.sigma ** 2)
+        c = 1 / ( self.sigma * sqrt(ttm))
+        c2 = c / self.sigma
+        y = _lambda * (1 / c) + c * log(self.H ** 2 / (spot * K))
+        y1 = _lambda * (1 / c) + c * log(self.H / spot)
+        x1 = _lambda * (1 / c) + c * log(spot / self.H)
+        dfK = K * exp(-self.r * ttm)
+        HS = self.H / spot
+
+        d = sqrt(ttm) * (0.5 - self.r / (self.sigma ** 2))
+
+        vega = spot * norm.pdf(-x1) * (d - log(spot/self.H) * c2) \
+            + dfK * norm.pdf(1 / c - x1) * (sqrt(ttm) + log(spot/self.H) * c2 - d) \
+            - spot * (HS ** (2 * _lambda)) * log(HS) * 4 * self.r / (self.sigma ** 3) * (norm.cdf(y) - norm.cdf(y1)) \
+            + spot * (HS ** (2 * _lambda)) * (norm.pdf(y) * (d - c2 * log(HS * self.H / K)) - norm.pdf(y1) * (d - c2 * log(HS))) \
+            + dfK * (HS ** (2 * _lambda - 2)) * log(HS) * 4 * self.r / (self.sigma ** 3) * (norm.cdf(y - 1/c) - norm.cdf(y1 - 1/c)) \
+            - dfK * (HS ** (2 * _lambda - 2)) * (norm.pdf(y - 1/c) * (d - sqrt(ttm) - c2 * log(HS * self.H / K)) - norm.pdf(y1 - 1/c) * (d - sqrt(ttm) - c2 * log(HS)))
+
+        return vega
     
     def reset(self):
         self.current = self.initial

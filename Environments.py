@@ -51,6 +51,18 @@ class DiscreteEnv(gym.Env):
         # Initalize state
         self.state = self._initiate_state()
 
+        # Define payoff (to be changed)
+        self.derivative_type = "option"
+        self.call = True
+        self.up = True
+        self.out = False
+
+    def _get_derivative_value(self):
+        if self.derivative_type == "option":
+            return self.generator.get_option_value(self.K, self.state[-1], self.call)
+        elif self.derivative_type == "barrier":
+            return self.generator.get_barrier_value(self.K, self.state[-1], self.up, self.out, self.call)
+
     def _initiate_state(self):
         return [0, self.generator.current, self.expiry]
 
@@ -70,7 +82,7 @@ class DiscreteEnv(gym.Env):
         
         # calc portfolio value at the beginning of the step & at the end to get reward
         old_cost = self.cost # cumulative trading costs
-        old_option_value = self.generator.get_option_value(self.K, self.state[-1])
+        old_option_value = self._get_derivative_value()
         old_und_value = self.state[1]
         
         # state: s -> s+1
@@ -79,7 +91,7 @@ class DiscreteEnv(gym.Env):
 
         new_und = self.generator.get_next()
         self.state = [action, new_und, self.state[-1] - 1]
-        new_option_value = self.generator.get_option_value(self.K, self.state[-1])
+        new_option_value = self._get_derivative_value()
         
         # Calculate reward
         reward = self.reward_func(new_option_value, old_option_value, 
@@ -131,7 +143,7 @@ class DiscreteEnv(gym.Env):
         
         self.generator.reset()
         self.K = self.generator.current
-        option_value = self.generator.get_option_value(self.K, self.expiry, True)
+        option_value = self._get_derivative_value()
         
         # Reset some attributes
         self.cost = 0

@@ -7,6 +7,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+from machin.utils.tensor_board import TensorBoard
+
+import torch
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter()
+
+#board = TensorBoard()
+#board.init()
+#print(board.is_inited())
+# for i in range(100):
+#     writer.add_scalar("ABC", 0.2*i, i)
+    
+# writer.close()
 ##### Environment config ###############
 
 sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
@@ -14,7 +27,7 @@ r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 # corresponds to trading freq of 5x per day
 ttm = 50
-kappa = 0.0
+kappa = 0.1
 cost_multiplier = 0.0
 discount = 0.85
 
@@ -35,23 +48,31 @@ env = DiscreteEnv(**env_args)
 
 observe_dim = 3
 action_num = 101
-solved_reward = 550
+solved_reward = 100
 solved_repeat = 7
 max_episodes = 15000
 
 # 1 epoch = 3000 episodes = 150k time-steps
 epoch = 150000
-batch_size = 32
+batch_size = 32 
 n_epochs_per_update = 5
 
 #n_updates = int(epoch * n_epochs_per_update / batch_size)
 final_eps = 0.05
 eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
 
-layers = [16, 32, 32, 32]
+layers = [20, 20, 20, 20]
 learning_rate = 1e-5
 
-n_sim = 300
+n_sim = 100
+
+## PPO setup
+gae_lambda = 0.985
+value_weight = 0.8
+entropy_weight = -0.2
+actor_lr = 1e-4
+critic_lr = 1e-5
+surrogate_loss_clip = 0.3 # min and max acceptable KL divergence
 
 ## Model Averager setup
 n_steps = 500
@@ -75,8 +96,9 @@ if __name__ == "__main__":
     # dqn.test(generator=generator, env_args=env_args, n_sim=n_sim)
 
     ## TESTING PPO
-    ppo = Models.PPO_Model(observe_dim, action_num, layers, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
-    ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
+    ppo = Models.PPO_Model(observe_dim, action_num, layers, batch_size=batch_size, discount=discount,surrogate_loss_clip=surrogate_loss_clip,
+                            gae_lambda=gae_lambda, entropy_weight=entropy_weight, value_weight=value_weight, actor_learning_rate=actor_lr, critic_learning_rate=critic_lr)
+    ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True, writer=writer)
 
     generator = GBM_Generator(S0, r, sigma, freq)
     env_args = {

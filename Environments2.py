@@ -1,4 +1,3 @@
-import math
 from Generators import GBM_Generator
 from Reward import Reward
 import numpy as np
@@ -7,7 +6,7 @@ import gym
 from gym import spaces
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-class DiscreteEnv(gym.Env):
+class BarrierEnv(gym.Env):
 
     def __init__(self,
                 generator : GBM_Generator,
@@ -31,9 +30,10 @@ class DiscreteEnv(gym.Env):
         self.reward_func = self._reward_class.get_reward_func(reward_type)
 
         self.generator = generator
-        
-        # State (observation) space for Gym [action, price, ttm]
-        self.observation_space = spaces.Box(low = np.array([0, 0, 0]), high = np.array([100, np.inf, self.expiry]) )
+        self.init_barrier_dist = self.generator.current - self.generator.H
+
+        # State (observation) space for Gym [holding, price, ttm, barrier dist]
+        self.observation_space = spaces.Box(low = np.array([0, 0, 0, 0]), high = np.array([100, np.inf, self.expiry, np.inf]) )
 
         # Create discrete action space
         self.actions = np.arange(0, 101)
@@ -51,35 +51,35 @@ class DiscreteEnv(gym.Env):
         
         # Initalize state
         self.state = self._initiate_state()
-
+        
         # Define payoff (to be changed)
-        self.derivative_type = "option"
-        self.call = True
-        self.up = True
+        self.derivative_type = "barrier"
+        self.call = False
+        self.up = False
         self.out = False
 
     def _get_derivative_value(self):
         if self.derivative_type == "option":
-            return self.generator.get_option_value(self.K, self.state[-1], self.call)
+            return self.generator.get_option_value(self.K, self.state[2], self.call)
         elif self.derivative_type == "barrier":
-            return self.generator.get_barrier_value(self.K, self.state[-1], self.up, self.out, self.call)
+            return self.generator.get_barrier_value(self.K, self.state[2], self.up, self.out, self.call)
 
     def _initiate_state(self):
-        return [0, self.generator.current, self.expiry]
+        return [0, self.generator.current, self.expiry, self.init_barrier_dist]
 
     def normalize_state(self, state):
-        normalized = [state[0]/100.0 , (math.log(state[1])-self.generator.r)/self.generator.sigma, state[2]/self.expiry]
+        normalized = [(state[0]-50)/50.0 , (state[1]-100)*2, (state[2]-25.0)/25.0, (state[3]-self.init_barrier_dist)*2]
         return normalized
 
     def denormalize_state(self, state):
-        denorm = [state[0]*100, math.exp(state[1]*self.generator.sigma+self.generator.r), state[2]*self.expiry]
+        denorm = [state[0]*50+50, state[1]/2+100, state[2]*25.0+25.0, state[3]/2+self.init_barrier_dist]
         return denorm
 
     def step(self, action):
 
         #action = np.random.choice(np.flatnonzero(action == np.max(action)))
 
-        self.terminal = (self.state[-1] == 1)
+        self.terminal = (self.state[2] == 1)
         
         # calc portfolio value at the beginning of the step & at the end to get reward
         old_cost = self.cost # cumulative trading costs
@@ -91,7 +91,7 @@ class DiscreteEnv(gym.Env):
         if (action != self.state[0]) : self.trades += 1
 
         new_und = self.generator.get_next()
-        self.state = [action, new_und, self.state[-1] - 1]
+        self.state = [action, new_und, self.state[2] - 1, new_und - self.generator.H]
         new_option_value = self._get_derivative_value()
         
         # Calculate reward
@@ -99,13 +99,9 @@ class DiscreteEnv(gym.Env):
                                         new_und = self.state[1], 
                                         old_und = old_und_value, 
                                         trading_cost = self.cost - old_cost,
-                                        holdings = self.state[0])
+                                        holdings= self.state[0])
 
         if self.terminal:
-            # at expiry need to liquidate our position in the underlying
-            liquidation_cost = self._get_trading_cost(0)
-            reward -= liquidation_cost
-
             dic = self._out()
             df = pd.DataFrame(dic)
             # transform states

@@ -45,23 +45,27 @@ class QNet(nn.Module):
             a = fc(a)
         return a
 
-# PPO Actor model
-class Actor(nn.Module):
+class PPOBase(nn.Module):
     def __init__(self, state_dim, action_num, layers):
         super().__init__()
         self.n_layers = len(layers)
         bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
         self.bn_layers = nn.ModuleList(bn_layers)
-        layers = [state_dim] + layers + [action_num]
+        layers = [state_dim] + layers
         fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+        self.value_layer = nn.Linear(layers[-1],1)
+        self.prob_layer = nn.Linear(layers[-1],action_num)
         self.fc_layers = nn.ModuleList(fc_layers)
 
-    def forward(self, state, action=None):
+    def forward_actor(self, state, action=None):
         a = self.fc_layers[0](state)
-        for i, fc in enumerate(self.fc_layers[1:]):
-            a = t.relu(self.bn_layers[i](a))
-            a = fc(a)
+        a = t.relu(self.bn_layers[0](a))
 
+        for i, fc in enumerate(self.fc_layers[1:]):
+            a = fc(a)
+            a = t.relu(self.bn_layers[i+1](a))
+
+        a = self.prob_layer(a)
         probs = t.softmax(a, dim=1)
         dist = Categorical(probs=probs)
         act = action if action is not None else dist.sample()
@@ -69,24 +73,73 @@ class Actor(nn.Module):
         act_log_prob = dist.log_prob(act.flatten())
         return act, act_log_prob, act_entropy
 
+    def forward_critic(self, state):
+        a = self.fc_layers[0](state)
+        a = t.relu(self.bn_layers[0](a))
+
+        for i, fc in enumerate(self.fc_layers[1:]):
+            a = fc(a)
+            a = t.relu(self.bn_layers[i+1](a))
+
+        a = self.value_layer(a)
+        return a
+
+# PPO Actor model
+class Actor(nn.Module):
+    def __init__(self, ppo_base : PPOBase):
+        super().__init__()
+        self.base = ppo_base
+
+    def forward(self, state, action=None):
+        return self.base.forward_actor(state, action)
+
+    # def __init__(self, state_dim, action_num, layers):
+    #     super().__init__()
+    #     self.n_layers = len(layers)
+    #     bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+    #     self.bn_layers = nn.ModuleList(bn_layers)
+    #     layers = [state_dim] + layers + [action_num]
+    #     fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+    #     self.fc_layers = nn.ModuleList(fc_layers)
+
+    # def forward(self, state, action=None):
+    #     a = self.fc_layers[0](state)
+    #     for i, fc in enumerate(self.fc_layers[1:]):
+    #         a = t.relu(self.bn_layers[i](a))
+    #         a = fc(a)
+
+    #     probs = t.softmax(a, dim=1)
+    #     dist = Categorical(probs=probs)
+    #     act = action if action is not None else dist.sample()
+    #     act_entropy = dist.entropy()
+    #     act_log_prob = dist.log_prob(act.flatten())
+    #     return act, act_log_prob, act_entropy
+
 # PPO Critic model
 class Critic(nn.Module):
-    def __init__(self, state_dim, layers):
+    def __init__(self, ppo_base : PPOBase):
         super().__init__()
-
-        self.n_layers = len(layers)
-        bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
-        self.bn_layers = nn.ModuleList(bn_layers)
-        layers = [state_dim] + layers + [1]
-        fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
-        self.fc_layers = nn.ModuleList(fc_layers)
+        self.base = ppo_base
 
     def forward(self, state):
-        a = self.fc_layers[0](state)
-        for i, fc in enumerate(self.fc_layers[1:]):
-            a = t.relu(self.bn_layers[i](a))
-            a = fc(a)
-        return a
+        return self.base.forward_critic(state)
+
+    # def __init__(self, state_dim, layers):
+    #     super().__init__()
+
+    #     self.n_layers = len(layers)
+    #     bn_layers = [nn.LayerNorm(i, elementwise_affine=False) for i in layers]
+    #     self.bn_layers = nn.ModuleList(bn_layers)
+    #     layers = [state_dim] + layers + [1]
+    #     fc_layers = [nn.Linear(first, second) for first, second in zip(layers, layers[1:])]
+    #     self.fc_layers = nn.ModuleList(fc_layers)
+
+    # def forward(self, state):
+    #     a = self.fc_layers[0](state)
+    #     for i, fc in enumerate(self.fc_layers[1:]):
+    #         a = t.relu(self.bn_layers[i](a))
+    #         a = fc(a)
+    #     return a
 
 # Abstract model class
 class Model(ABC):
@@ -415,8 +468,9 @@ class PPO_Model(Model):
                 surrogate_loss_clip=0.2):
 
         self.observe_dim = observe_dim
-        self.actor = Actor(observe_dim, action_num, layers)
-        self.critic = Critic(observe_dim, layers)
+        base = PPOBase(observe_dim, action_num, layers)
+        self.actor = Actor(base)
+        self.critic = Critic(base)
 
         self.model = PPO(self.actor, self.critic,
                         t.optim.Adam,
@@ -432,8 +486,8 @@ class PPO_Model(Model):
                         value_weight=value_weight,
                         gae_lambda=gae_lambda,
                         surrogate_loss_clip = surrogate_loss_clip,
-                        actor_update_times=50, # default 5
-                        critic_update_times=100) # default 10
+                        actor_update_times=5, # default 5
+                        critic_update_times=10) # default 10
 
     def train(self, max_episodes, env, solved_reward, solved_repeat, load_weights, save_weights, writer : SummaryWriter):
         episode, step, reward_fulfilled = 0, 0, 0
@@ -468,7 +522,7 @@ class PPO_Model(Model):
                     state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
                     total_reward += reward
                     
-                    clipped_reward = np.clip(reward,-30.0,30.0)
+                    clipped_reward = reward #np.clip(reward,-30.0,30.0)
                     ep_list.append({
                         "state": {"state": old_state},
                         "action": {"action": action},

@@ -27,9 +27,9 @@ r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 # corresponds to trading freq of 5x per day
 ttm = 50
-kappa = 0.1
+kappa = 0.15
 cost_multiplier = 0.0
-discount = 0.85
+discount = 0.88
 
 generator = GBM_Generator(S0, r, sigma, freq)
 env_args = {
@@ -50,7 +50,7 @@ observe_dim = 3
 action_num = 101
 solved_reward = 100
 solved_repeat = 7
-max_episodes = 10000
+max_episodes = 35000
 
 # 1 epoch = 3000 episodes = 150k time-steps
 epoch = 150000
@@ -67,12 +67,12 @@ learning_rate = 1e-5
 n_sim = 100
 
 ## PPO setup
-gae_lambda = 0.985
-value_weight = 0.8
-entropy_weight = -0.2
+gae_lambda = 0.95
+value_weight = - 0.2
+entropy_weight = 0.5
 actor_lr = 1e-4
-critic_lr = 1e-5
-surrogate_loss_clip = 0.6 # min and max acceptable KL divergence
+critic_lr = 1e-4
+surrogate_loss_clip = 0.1 # min and max acceptable KL divergence
 
 ## Model Averager setup
 n_steps = 500
@@ -81,24 +81,8 @@ eps_func = Utils.EpsFunction(n_steps).get_func()
 
 if __name__ == "__main__":
     ## TESTING DQN
-    # dqn = Models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
-    # dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
-
-    # generator = GBM_Generator(S0, r, sigma, freq)
-    # env_args = {
-    #     "generator" : generator,
-    #     "ttm" : ttm,
-    #     "kappa" : kappa,
-    #     "cost_multiplier" : cost_multiplier,
-    #     "reward_type" : "basic",
-    #     "testing" : True
-    # }
-    # dqn.test(generator=generator, env_args=env_args, n_sim=n_sim)
-
-    ## TESTING PPO
-    ppo = Models.PPO_Model(observe_dim, action_num, layers, batch_size=batch_size, discount=discount,surrogate_loss_clip=surrogate_loss_clip,
-                            gae_lambda=gae_lambda, entropy_weight=entropy_weight, value_weight=value_weight, actor_learning_rate=actor_lr, critic_learning_rate=critic_lr)
-    ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True, writer=writer)
+    dqn = Models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
+    dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
 
     generator = GBM_Generator(S0, r, sigma, freq)
     env_args = {
@@ -109,8 +93,24 @@ if __name__ == "__main__":
         "reward_type" : "basic",
         "testing" : True
     }
+    dqn.test(generator=generator, env_args=env_args, n_sim=n_sim)
 
-    ppo.test(generator=generator, env_args=env_args, n_sim=n_sim)
+    ## TESTING PPO
+    # ppo = Models.PPO_Model(observe_dim, action_num, layers, batch_size=batch_size, discount=discount,surrogate_loss_clip=surrogate_loss_clip,
+    #                         gae_lambda=gae_lambda, entropy_weight=entropy_weight, value_weight=value_weight, actor_learning_rate=actor_lr, critic_learning_rate=critic_lr)
+    # ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True, writer=writer)
+
+    # generator = GBM_Generator(S0, r, sigma, freq)
+    # env_args = {
+    #     "generator" : generator,
+    #     "ttm" : ttm,
+    #     "kappa" : kappa,
+    #     "cost_multiplier" : cost_multiplier,
+    #     "reward_type" : "basic",
+    #     "testing" : True
+    # }
+
+    #ppo.test(generator=generator, env_args=env_args, n_sim=n_sim)
 
     ## TESTING MODEL AVERAGER
     # agent = Models.ModelAverager(env, discount)

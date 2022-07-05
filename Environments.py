@@ -58,6 +58,8 @@ class DiscreteEnv(gym.Env):
         self.up = True
         self.out = False
 
+        self.seed_n = 0
+
     def _get_derivative_value(self):
         if self.derivative_type == "option":
             return self.generator.get_option_value(self.K, self.state[-1], self.call)
@@ -147,6 +149,10 @@ class DiscreteEnv(gym.Env):
         """ Called at the beginning of each episode. """
         
         self.generator.reset()
+        #if self.generator.seed is None:
+            #self.generator.reset_with_seed(self.seed_n)
+            #self.seed_n = int(self.episode // 30)
+
         self.K = self.generator.current
         option_value = self._get_derivative_value()
         

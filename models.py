@@ -468,7 +468,7 @@ class PPO_Model(Model):
                     state = t.tensor(state, dtype=t.float32).view(1, self.observe_dim)
                     total_reward += reward
                     
-                    clipped_reward = reward #np.clip(reward,-10.0,10.0)
+                    clipped_reward = np.clip(reward,-30.0,30.0)
                     ep_list.append({
                         "state": {"state": old_state},
                         "action": {"action": action},

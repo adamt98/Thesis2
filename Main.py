@@ -50,7 +50,7 @@ observe_dim = 3
 action_num = 101
 solved_reward = 100
 solved_repeat = 7
-max_episodes = 15000
+max_episodes = 10000
 
 # 1 epoch = 3000 episodes = 150k time-steps
 epoch = 150000
@@ -72,7 +72,7 @@ value_weight = 0.8
 entropy_weight = -0.2
 actor_lr = 1e-4
 critic_lr = 1e-5
-surrogate_loss_clip = 0.3 # min and max acceptable KL divergence
+surrogate_loss_clip = 0.6 # min and max acceptable KL divergence
 
 ## Model Averager setup
 n_steps = 500

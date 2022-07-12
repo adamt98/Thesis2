@@ -18,8 +18,13 @@ class Reward():
         pnl = - 100 * (new_opt_val - old_opt_val) + (new_und - old_und) * holdings
         return ( pnl - 0.5 * self.kappa * (pnl**2) ) - trading_cost
 
+    def _dummy_reward(self, new_opt_val, old_opt_val, new_und, old_und, trading_cost, holdings):
+        return holdings-50
+
     def get_reward_func(self, type):
         if type == "basic":
             return self._basic_reward
+        elif type == "dummy":
+            return self._dummy_reward
         else:
             raise "Unknown reward func type {type}"

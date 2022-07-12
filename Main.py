@@ -1,4 +1,3 @@
-from sklearn.model_selection import learning_curve
 from Environments import DiscreteEnv
 from Generators import GBM_Generator
 import Models
@@ -6,30 +5,61 @@ import Utils
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-from machin.utils.tensor_board import TensorBoard
-
 import torch
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter()
+#writer = SummaryWriter()
+from Models import DeltaHedge
 
-#board = TensorBoard()
-#board.init()
-#print(board.is_inited())
-# for i in range(100):
-#     writer.add_scalar("ABC", 0.2*i, i)
+from stable_baselines3 import PPO
+import Utils
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import Figure
+
+class FigureRecorderCallback(BaseCallback):
+    def __init__(self, test_env, verbose=0):
+        super(FigureRecorderCallback, self).__init__(verbose)
+        self.test_env = test_env
+
+    def _on_step(self): return True
+
+    def _on_rollout_end(self):
+        figure = plt.figure()
+
+        obs = self.test_env.reset()
+        done = False
+        while not done:
+            action, _states = self.model.predict(obs, deterministic=False)
+            obs, reward, done, info = self.test_env.step(action)
+        
     
-# writer.close()
+        model_actions = info['output'].actions.values
+
+        # delta hedge benchmark
+        obs = self.test_env.reset()
+        delta_agent = DeltaHedge(self.test_env.generator.initial)
+        delta_actions = delta_agent.test(self.test_env, obs).actions.values
+
+        figure.add_subplot().plot(delta_actions, 'b-', model_actions, 'g-')
+        
+        # Close the figure after logging it
+        self.logger.record("trajectory/figure", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+        plt.close()
+        return True
+
 ##### Environment config ###############
 
 sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
-freq = 0.2 # corresponds to trading freq of 5x per day
-ttm = 50
-kappa = 0.15
+freq = 0.2 #0.2 corresponds to trading freq of 5x per day
+ttm = 50 # 50 & freq=0.2 => 10 days expiry
+kappa = 0.8
 cost_multiplier = 0.0
-discount = 0.88
+discount = 0.95
 
 generator = GBM_Generator(S0, r, sigma, freq)
 env_args = {
@@ -44,48 +74,59 @@ env_args = {
 env = DiscreteEnv(**env_args)
 
 ##########################################
-##### Training hyperparameter setup ######
-
+##### PPO Training hyperparameter setup ######
+n_sim = 100
 observe_dim = 3
 action_num = 101
-solved_reward = 100
-solved_repeat = 7
-max_episodes = 35000
 
-# 1 epoch = 3000 episodes = 150k time-steps
-epoch = 150000
-batch_size = 32 
-n_epochs_per_update = 5
+max_episodes = 1200000
 
-#n_updates = int(epoch * n_epochs_per_update / batch_size)
-final_eps = 0.05
-eps_decay = np.exp(np.log(final_eps)/(max_episodes*50))
+epoch = 3000 # roll out 3000 episodes, then train
+n_epochs = 12 # 5 <=> pass over the rollout 5 times
+batch_size = 30
 
-layers = [20, 20, 20, 20]
-learning_rate = 1e-5
+policy_kwargs = dict(#activation_fn=torch.nn.ReLU,
+                     net_arch=[32,32, dict(pi=[32,32], vf=[32])]) # dict(pi=[10], vf=[10])
 
-n_sim = 100
+gradient_max = 1.0
+gae_lambda = 0.96
+value_weight = 1.0
+entropy_weight = 0.05
 
-## PPO setup
-gae_lambda = 0.95
-value_weight = - 0.2
-entropy_weight = 0.5
-actor_lr = 1e-4
-critic_lr = 1e-4
+def lr(x : float): 
+    return 1e-5 + (5e-4-1e-5)*x
+#lr=3e-5
 surrogate_loss_clip = 0.1 # min and max acceptable KL divergence
 
-## Model Averager setup
-n_steps = 500
-n_batches = 3
-eps_func = Utils.EpsFunction(n_steps).get_func()
+def simulate(env, obs):
+    done = False
+    while not done:
+        action, _states = model.predict(obs, deterministic=False)
+        obs, reward, done, info = env.step(action)
+    
+    return info['output']
 
 if __name__ == "__main__":
-    ## TESTING DQN
-    dqn = Models.DQN_Model(observe_dim, action_num, layers, eps_decay, learning_rate=learning_rate, batch_size=batch_size, discount=discount)
-    dqn.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True)
 
-    generator = GBM_Generator(S0, r, sigma, freq)
-    env_args = {
+    model = PPO(policy="MlpPolicy", 
+                policy_kwargs=policy_kwargs,
+                env=env,
+                learning_rate=lr, 
+                n_steps = epoch,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
+                gamma = discount,
+                gae_lambda=gae_lambda,
+                clip_range=surrogate_loss_clip,
+                normalize_advantage=True,
+                ent_coef=entropy_weight,
+                vf_coef=value_weight,
+                max_grad_norm=gradient_max,
+                tensorboard_log='./runs/',
+                verbose=1)
+
+    generator = GBM_Generator(S0, r, sigma, freq, seed=123)
+    test_env_args = {
         "generator" : generator,
         "ttm" : ttm,
         "kappa" : kappa,
@@ -93,55 +134,25 @@ if __name__ == "__main__":
         "reward_type" : "basic",
         "testing" : True
     }
-    dqn.test(generator=generator, env_args=env_args, n_sim=n_sim)
 
-    ## TESTING PPO
-    # ppo = Models.PPO_Model(observe_dim, action_num, layers, batch_size=batch_size, discount=discount,surrogate_loss_clip=surrogate_loss_clip,
-    #                         gae_lambda=gae_lambda, entropy_weight=entropy_weight, value_weight=value_weight, actor_learning_rate=actor_lr, critic_learning_rate=critic_lr)
-    # ppo.train(max_episodes=max_episodes, env=env, solved_reward=solved_reward, solved_repeat=solved_repeat, load_weights=False, save_weights=True, writer=writer)
+    test_env = DiscreteEnv(**test_env_args)
 
-    # generator = GBM_Generator(S0, r, sigma, freq)
-    # env_args = {
-    #     "generator" : generator,
-    #     "ttm" : ttm,
-    #     "kappa" : kappa,
-    #     "cost_multiplier" : cost_multiplier,
-    #     "reward_type" : "basic",
-    #     "testing" : True
-    # }
+    model.learn(total_timesteps=max_episodes, callback=FigureRecorderCallback(test_env))
+    model.save('./weights_PPO/')
 
-    #ppo.test(generator=generator, env_args=env_args, n_sim=n_sim)
-
-    ## TESTING MODEL AVERAGER
-    # agent = Models.ModelAverager(env, discount)
-    # agent.train(n_steps, n_batches, eps_func)
-
-    # generator = GBM_Generator(S0, r, sigma, freq)
-    # env_args = {
-    #     "generator" : generator,
-    #     "ttm" : ttm,
-    #     "kappa" : kappa,
-    #     "cost_multiplier" : cost_multiplier,
-    #     "reward_type" : "basic",
-    #     "testing" : True
-    # }
-    # agent.test(generator, env_args, n_sim=n_sim)
-
-    # gen = GBM_Generator(100.0, 0.0, 0.2, 1, None, 80.0)
-    # und = []
-    # opt = []
-    # bar = []
+    #####################################
+    ####### TESTING PHASE ###############
+    #####################################
     
-    # for i in range(50):
-    #     #und.append(gen.current)
-    #     bar.append(gen.get_DIP_vega(spot = 60.0 + i, K = 100.0, ttm = 5))
-    #     opt.append(gen.get_vega(spot = 60.0 + i, K = 80.0, ttm = 5) )
-    #     #gen.get_next()
+    obs = test_env.reset()
+    df = simulate(test_env, obs)
+    # delta hedge benchmark
+    delta_agent = DeltaHedge(generator.initial)
+    obs = test_env.reset()
+    delta = delta_agent.test(test_env, obs)
 
-    # plt.figure(1, figsize=(12, 8))
-    # # plt.subplot(121)
-    # # plt.plot(und)
-    # # plt.subplot(122)
-    # plt.plot(opt)
-    # plt.plot(bar)
-    # plt.show()
+    Utils.plot_decisions(delta, df)
+    Utils.plot_pnl(delta, df)
+
+    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, test_env_args, simulate)
+    Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

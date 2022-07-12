@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from IPython.utils import io
+
 from Environments import DiscreteEnv
 import os
 plots_dir = "./plots/"
@@ -158,14 +158,15 @@ def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func):
     env = DiscreteEnv(**env_kwargs)
     
     for i in tqdm(range(n_steps)):
+        
         for key in ["model","delta"]:
             # Perform DRL testing
-            env.reset_with_seed(11301*i)
-            with io.capture_output() as _:
-                if key == "model":
-                    df = simulator_func(env)
-                else:
-                    df = model_delta.test(env)
+            obs = env.reset_with_seed(11301*i)
+            
+            if key == "model":
+                df = simulator_func(env, obs)
+            else:
+                df = model_delta.test(env, obs)
 
             pnl_paths_dict[key].append(df.pnl)
             pnl_dict[key].append(df.pnl.cumsum().values[-1])

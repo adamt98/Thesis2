@@ -37,7 +37,7 @@ class DiscreteEnv(gym.Env):
 
         # Create discrete action space
         self.actions = np.arange(0, 101)
-        self.action_space = spaces.Box(-np.inf, np.inf, shape=(101,), dtype=np.float32)
+        self.action_space = spaces.Discrete(101) #Box(-np.inf, np.inf, shape=(101,), dtype=np.float32)
 
         # Memorize some things for plotting purposes
         self.option_memory = []
@@ -70,11 +70,11 @@ class DiscreteEnv(gym.Env):
         return [0, self.generator.current, self.expiry]
 
     def normalize_state(self, state):
-        normalized = [state[0]/100.0 , (math.log(state[1])-self.generator.r)/self.generator.sigma, state[2]/self.expiry]
+        normalized = [state[0]/100.0 , 10*(math.log(state[1]/100)-self.generator.r), state[2]/self.expiry]
         return normalized
 
     def denormalize_state(self, state):
-        denorm = [state[0]*100, math.exp(state[1]*self.generator.sigma+self.generator.r), state[2]*self.expiry]
+        denorm = [state[0]*100, 100*math.exp(state[1]/10.0+self.generator.r), state[2]*self.expiry]
         return denorm
 
     def step(self, action):
@@ -102,7 +102,7 @@ class DiscreteEnv(gym.Env):
                                         old_und = old_und_value, 
                                         trading_cost = self.cost - old_cost,
                                         holdings = self.state[0])
-
+        
         if self.terminal:
             # at expiry need to liquidate our position in the underlying
             liquidation_cost = self._get_trading_cost(0)
@@ -127,6 +127,9 @@ class DiscreteEnv(gym.Env):
         
         # transform states
         state = self.normalize_state(self.state)
+        # print(state)
+        # print(self.denormalize_state(state))
+        # print("_____________________________")
         return state, reward, self.terminal, {"output":pd.DataFrame()}
 
     def _get_trading_cost(self, action):

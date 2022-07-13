@@ -59,7 +59,7 @@ freq = 0.2 #0.2 corresponds to trading freq of 5x per day
 ttm = 50 # 50 & freq=0.2 => 10 days expiry
 kappa = 0.8
 cost_multiplier = 0.0
-discount = 0.95
+discount = 0.88
 
 generator = GBM_Generator(S0, r, sigma, freq)
 env_args = {
@@ -79,10 +79,10 @@ n_sim = 100
 observe_dim = 3
 action_num = 101
 
-max_episodes = 1200000
+max_episodes = 2000000
 
 epoch = 3000 # roll out 3000 episodes, then train
-n_epochs = 12 # 5 <=> pass over the rollout 5 times
+n_epochs = 15 # 5 <=> pass over the rollout 5 times
 batch_size = 30
 
 policy_kwargs = dict(#activation_fn=torch.nn.ReLU,

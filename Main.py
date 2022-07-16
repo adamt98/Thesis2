@@ -79,7 +79,7 @@ n_sim = 100
 observe_dim = 3
 action_num = 101
 
-max_episodes = 2000000
+max_episodes = 6000
 
 epoch = 3000 # roll out 3000 episodes, then train
 n_epochs = 15 # 5 <=> pass over the rollout 5 times
@@ -154,5 +154,5 @@ if __name__ == "__main__":
     Utils.plot_decisions(delta, df)
     Utils.plot_pnl(delta, df)
 
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, test_env_args, simulate)
+    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, test_env, simulate)
     Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)

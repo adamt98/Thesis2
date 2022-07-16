@@ -253,11 +253,13 @@ class GBM_Generator:
     
     def reset(self):
         self.current = self.initial
+        self.is_knocked = False
         if self.seed is not None:
             random.seed(self.seed)
 
     def reset_with_seed(self, seed):
         self.current = self.initial
+        self.is_knocked = False
         random.seed(seed)
 
 class HestonGenerator:

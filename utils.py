@@ -153,9 +153,8 @@ def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
     plot1 = pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
     plot1.get_figure().savefig(plots_dir+"std_density.png")
 
-def simulate_pnl(model_delta, n_steps, env_kwargs, simulator_func):
+def simulate_pnl(model_delta, n_steps, env, simulator_func):
     pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
-    env = DiscreteEnv(**env_kwargs)
     
     for i in tqdm(range(n_steps)):
         

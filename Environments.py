@@ -33,7 +33,7 @@ class DiscreteEnv(gym.Env):
         self.generator = generator
         
         # State (observation) space for Gym [action, price, ttm]
-        self.observation_space = spaces.Box(low = np.array([0, 0, 0]), high = np.array([100, np.inf, self.expiry]) )
+        self.observation_space = spaces.Box(low = np.array([0, -20, 0]), high = np.array([1, 20, 1]) )
 
         # Create discrete action space
         self.actions = np.arange(0, 101)

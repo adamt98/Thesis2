@@ -1,5 +1,5 @@
 from Environments import DiscreteEnv
-from Environments2 import BarrierEnv
+from Environments2 import BarrierEnv, BarrierEnv2
 from Generators import GBM_Generator, HestonGenerator
 import Utils
 
@@ -16,8 +16,11 @@ class DeltaHedge():
     def train(self):
         pass
 
-    def predict_action(self, state, env : DiscreteEnv | BarrierEnv):
-        _, spot, ttm = env.denormalize_state(state)
+    def predict_action(self, state, env : DiscreteEnv | BarrierEnv | BarrierEnv2):
+        if type(env) == BarrierEnv2:
+            _, spot, ttm, _ = env.denormalize_state(state)
+        else:
+            _, spot, ttm = env.denormalize_state(state)
 
         if type(env) == DiscreteEnv:
 

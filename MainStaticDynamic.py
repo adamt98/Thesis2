@@ -1,3 +1,15 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: ipynb,py:light
+#     text_representation:
+#       extension: .py
+#       format_name: light
+#       format_version: '1.5'
+#       jupytext_version: 1.14.0
+# ---
+
 from cProfile import label
 from re import T
 from Environments2 import BarrierEnv, BarrierEnv2
@@ -52,7 +64,7 @@ class FigureRecorderCallback(BaseCallback):
         plt.close()
         return True
 
-##### Environment config ###############
+# #### Environment config ###############
 
 sigma = 0.005*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized

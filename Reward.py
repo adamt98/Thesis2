@@ -24,7 +24,7 @@ class Reward():
     # we are long a single DIP
     def _static_hedge_reward(self, new_barrier_val, old_barrier_val, new_static_hedge_val, old_static_hedge_val, new_und, old_und, trading_cost, holdings):
         pnl = 100 * (new_barrier_val - old_barrier_val) - 100 * (new_static_hedge_val - old_static_hedge_val) + (new_und - old_und) * holdings
-        return ( pnl - 0.5 * self.kappa * (pnl**2) ) - trading_cost, pnl
+        return ( pnl - 0.5 * self.kappa * (pnl**2) - trading_cost) / 100.0, pnl
 
     def get_reward_func(self, type):
         if type == "basic":

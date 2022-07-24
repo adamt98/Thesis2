@@ -12,6 +12,9 @@
 
 from cProfile import label
 from re import T
+from typing import Callable
+
+import gym
 from Environments2 import BarrierEnv, BarrierEnv2
 from Generators import GBM_Generator
 import Models
@@ -46,7 +49,7 @@ class FigureRecorderCallback(BaseCallback):
         obs = self.test_env.reset()
         done = False
         while not done:
-            action, _states = self.model.predict(obs, deterministic=False)
+            action, _states = self.model.predict(obs, deterministic=True)
             obs, reward, done, info = self.test_env.step(action)
         
     
@@ -64,16 +67,33 @@ class FigureRecorderCallback(BaseCallback):
         plt.close()
         return True
 
+def make_env(env_args, rank: int, seed: int = 0) -> Callable:
+    """
+    Utility function for multiprocessed env.
+    
+    :param env_id: (str) the environment ID
+    :param num_env: (int) the number of environment you wish to have in subprocesses
+    :param seed: (int) the inital seed for RNG
+    :param rank: (int) index of the subprocess
+    :return: (Callable)
+    """
+    def _init() -> gym.Env:
+        env = BarrierEnv(**env_args)
+        env.seed(seed + rank)
+        return env
+        
+    return _init
+
 # #### Environment config ###############
 
-sigma = 0.005*np.sqrt(250) # 1% vol per day, annualized
+sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 #0.2 corresponds to trading freq of 5x per day
 ttm = 50 # 50 & freq=0.2 => 10 days expiry
 kappa = 1.0
 cost_multiplier = 0.0
-discount = 0.88
+discount = 0.99
 
 barrier = 90
 n_puts_sold = 1
@@ -94,7 +114,9 @@ env_args = {
     "max_action" : max_action
 }
 
-env = BarrierEnv(**env_args)
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import VecMonitor
+num_cpu = 7
 
 ##########################################
 ##### PPO Training hyperparameter setup ######
@@ -102,36 +124,36 @@ n_sim = 100
 observe_dim = 3
 
 
-max_episodes = 50*24000
+max_episodes = 50*15000
 
-epoch = 3000*50 # roll out 3000 episodes, then train
-n_epochs = 5 # 5 <=> pass over the rollout 5 times
+epoch = int(50*240/7) # roll out 3000 episodes, then train
+n_epochs = 15 # 5 <=> pass over the rollout 5 times
 batch_size = 30
 
-policy_kwargs = dict(activation_fn=torch.nn.LeakyReLU,
-                     net_arch=[32,32, dict(pi=[32,32], vf=[32])]) # dict(pi=[10], vf=[10])
+policy_kwargs = dict(activation_fn=torch.nn.Tanh,
+                     net_arch=[dict(pi=[20,20,20], vf=[40,40])]) # dict(pi=[10], vf=[10])
 
 gradient_max = 1.0
-gae_lambda = 0.96
-value_weight = 1.0
-entropy_weight = 0.05
+gae_lambda = 0.9
+value_weight = 0.8
+entropy_weight = 0.1
 
 def lr(x : float): 
-    return 1e-3
-    #return 1e-5 + (5e-4-1e-5)*x
+    return 3e-5 #1e-4 + (1e-3-1e-4)*x
 
 #lr=3e-5
-surrogate_loss_clip = 0.1 # min and max acceptable KL divergence
+surrogate_loss_clip = 0.25 # min and max acceptable KL divergence
 
 def simulate(env, obs):
     done = False
     while not done:
-        action, _states = model.predict(obs, deterministic=False)
+        action, _states = model.predict(obs, deterministic=True)
         obs, reward, done, info = env.step(action)
     
     return info['output']
 
 if __name__ == "__main__":
+    env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
     # vals = []
     # vals2 = []
     # deltas = []

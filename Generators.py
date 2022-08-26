@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import random
 from random import gauss
 from math import log, sqrt, exp
@@ -13,15 +12,38 @@ class GBM_Generator:
     S0:      Asset inital price.
     r:       Interest rate expressed in annual terms.
     sigma:   Volatility expressed annual terms. 
-    
+    freq:    Frequency of trading. e.g. freq=0.2 is equivalent to 5x per day, freq=2 means once every two days
+    seed:    Seed value
+    barrier: Barrier level in case we want to use the generator for barrier options
 
     Methods
     -------
     get_next()
         generates next value
         
+    get_option_value()
+        returns vanilla option value
+
+    get_barrier_value()
+        returns current barrier options value given specs
+
+    get_DIP_delta()
+        returns the current delta of a down-in put
+
+    get_delta()
+        returns current delta of a vanilla call
+
+    get_vega()
+        returns vega of a vanlla call
+
+    get_DIP_vega()
+        returns vega of a down-in put
+
     reset()
         resets the generator to intial value (S0)
+
+    reset_with_seed()
+        resets generator to initial value, seeding it to the specified seed value
 
     """
 
@@ -72,7 +94,7 @@ class GBM_Generator:
 
     def get_barrier_value(self, K, ttm, up, out, call = True):
         """
-        Calculates down & in barrier call/put price under current GBM dynamics.
+        Calculates barrier call/put price under current GBM dynamics.
         
         Parameters:
             - K = strike price
@@ -178,8 +200,10 @@ class GBM_Generator:
                     if out: return self.get_option_value(K, orig_ttm, call) - down_in_put
                     else: return down_in_put
         
-    
     def get_DIP_delta(self, spot, K, ttm):
+        """
+        DIP = down-in put
+        """
         if spot < self.H:
             is_knocked = True
         elif self.is_knocked:
@@ -262,7 +286,11 @@ class GBM_Generator:
         self.is_knocked = False
         random.seed(seed)
 
+# Unused
 class HestonGenerator:
+    """
+    Implements Heston-generated underlying paths, currently unused in the analysis.
+    """
     def __init__(self, S0, r, V0, rho, kappa, theta, xi, freq, seed = None):
         self.initial = S0
         self.current = S0

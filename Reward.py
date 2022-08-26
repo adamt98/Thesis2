@@ -6,6 +6,7 @@ class Reward():
     Types
     ----------
     "basic" : reward func implemented by all the research papers
+    "static": takes into account the static hedge value
 
     Methods
     -------

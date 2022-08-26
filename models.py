@@ -1,9 +1,5 @@
 from Environments import DiscreteEnv
-from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv3, BarrierEnv4
-from Generators import GBM_Generator, HestonGenerator
-import Utils
-import numpy as np
-
+from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3, BarrierEnv4
 
 # Delta Hedging benchmark
 class DeltaHedge():
@@ -15,10 +11,7 @@ class DeltaHedge():
         self.min_action = min_action
         self.put_K = put_K
     
-    def train(self):
-        pass
-
-    def predict_action(self, state, env : DiscreteEnv | BarrierEnv | BarrierEnv2):
+    def predict_action(self, state, env : DiscreteEnv | BarrierEnv | BarrierEnv2 | BarrierEnv3 | BarrierEnv4):
         if type(env) == BarrierEnv2:
             _, spot, ttm, _ = env.denormalize_state(state)
         elif type(env) == BarrierEnv4:
@@ -29,21 +22,12 @@ class DeltaHedge():
             _, spot, ttm = env.denormalize_state(state)
 
         if type(env) == DiscreteEnv:
-
             delta = env.generator.get_delta(spot, self.K, ttm)
             shares = round(100*delta)
             if self.call: return shares 
             else: return shares - 100
 
         elif type(env) == BarrierEnv3:
-            # vega_DIP = env.generator.get_DIP_vega(spot, self.K, ttm)
-            # vanilla_DIP = env.generator.get_vega(spot, self.put_K, ttm)
-            # n_puts = round(vega_DIP/vanilla_DIP)
-
-            # delta_DIP = env.generator.get_DIP_delta(spot, self.K, ttm)
-            # delta_put = env.generator.get_delta(spot, self.put_K, ttm) - 1
-            # delta_portfolio = delta_DIP - n_puts*delta_put
-            # shares = - round(100*delta_portfolio)
             delta_DIP = env.generator.get_DIP_delta(spot, self.K, ttm)
             delta_put = env.generator.get_delta(spot, self.put_K, ttm) - 1
             delta_portfolio = delta_DIP - self.n_puts_sold*delta_put

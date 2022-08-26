@@ -1,29 +1,19 @@
-from cProfile import label
-from re import T
 from typing import Callable
-
 import gym
-from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv4, BarrierEnv3
-from Generators import GBM_Generator
-import Models
-import Utils
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import torch
-from torch.utils.tensorboard import SummaryWriter
-#writer = SummaryWriter()
-from Models import DeltaHedge
-
-from stable_baselines3 import PPO
-import Utils
-
-import numpy as np
 import matplotlib.pyplot as plt
 
+from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3
+from Generators import GBM_Generator
+from Models import DeltaHedge
+import Utils
+
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 class FigureRecorderCallback(BaseCallback):
     def __init__(self, test_env, verbose=0):
@@ -93,7 +83,7 @@ discount = 0.9
 put_strike = 100
 
 barrier = 97
-n_puts_sold = 1 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+n_puts_sold = 1
 min_action = -100
 max_action = 300
 action_num = max_action - min_action
@@ -114,18 +104,14 @@ env_args = {
     #"put_K" : put_strike
 }
 
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.vec_env import VecMonitor
+
 num_cpu = 7
+n_sim = 100
+observe_dim = 4
 
 ##########################################
 ##### PPO Training hyperparameter setup ######
-n_sim = 100
-observe_dim = 4 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
 max_episodes = 50*25000
-
 epoch = int(50*300/7) # roll out 240 episodes, then train
 n_epochs = 5 # 5 <=> pass over the rollout 5 times
 batch_size = 30
@@ -144,7 +130,6 @@ def surrogate_loss_clip(x : float):
 def lr(x : float): 
     return 1e-4 + (1e-3 - 1e-4)*x
 
-
 def simulate(env, obs):
     done = False
     while not done:
@@ -153,80 +138,10 @@ def simulate(env, obs):
     
     return info['output']
 
-from stable_baselines3.common.env_checker import check_env
 
 if __name__ == "__main__":
-    generator = GBM_Generator(100, 0, 0.16, freq, barrier=barrier)
-    hits = 0
-    total = 1000
-    for i in range(total):
-        generator.reset_with_seed(i)
-        for j in range(150):
-            if generator.get_next() <= 97:
-                hits += 1
-                break
-
-    print(hits/total)
-    print("done")
-    # vals = []
-    # vals2 = []
-    # deltas = []
-    # delta2 = []
-    # spots = np.arange(80, 120, 0.05)
-    # for spot in spots:
-    #     ttm1 = 50
-    #     barrier = 97
-    #     K = 100
-    #     K1 = 97.0
-    #     generator = GBM_Generator(spot, r, sigma, freq, barrier=barrier)
-    #     val = generator.get_barrier_value(K=K, ttm=ttm1, up=False, out=False, call=False)
-    #     val2 = generator.get_option_value(K=K1, ttm=ttm1, call=False)
-    #     delta_barr = generator.get_DIP_vega(spot, K=K, ttm=ttm1) 
-        
-    #     delta_static = generator.get_vega(spot, K1, ttm1)# - 1 # get_delta gives call delta, we're selling a put
-    #     delta2.append(delta_static)
-        
-    #     vals.append(val)
-    #     vals2.append(val2)
-    #     deltas.append(delta_barr)
-
-    # plt.plot(spots, deltas, label = "DIP")
-    # plt.plot(spots, delta2, label = "Vanilla put")
-    # plt.legend()
-    # plt.title("Delta comparison")
-    # #plt.savefig('deltas_comparison')
-    # plt.show()
-
-    # plt.plot(spots, vals, label = "DIP")
-    # plt.plot(spots, vals2, label = "Vanilla put")
-    # plt.legend()
-    # plt.title("Value comparison")
-    # #plt.savefig('vals_comparison')
-    # plt.show()
-
-    # diffs = np.array(deltas) - np.array(delta2)
-    # plt.plot(spots, diffs, label = "DIP - Vanilla put")
-    # plt.legend()
-    # plt.title("Difference in deltas")
-    # #plt.savefig('delta_diff')
-    # plt.show()
-
-    # vals3 = []
-    # unds = []
-    # generator = GBM_Generator(100, r, sigma, freq)
-    # for i in range(100):
-    #     unds.append(generator.get_next())
-    #     vals3.append(generator.get_option_value(100,100-i,False))
-
-    # plt.figure(1)
-    # plt.subplot(121)
-    # plt.plot(vals3)
-    # plt.subplot(122)
-    # plt.plot(unds)
-    # plt.show()
-
+    
     env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
-    #env = BarrierEnv3(**env_args)
     model = PPO(policy="MlpPolicy", 
                 policy_kwargs=policy_kwargs,
                 env=env,

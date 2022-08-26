@@ -1,28 +1,19 @@
-from typing import Callable
 from Environments import DiscreteEnv
 from Generators import GBM_Generator
-import Models
+from Models import DeltaHedge
 import Utils
+
+from typing import Callable
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
+import gym
 import torch
-from torch.utils.tensorboard import SummaryWriter
-#writer = SummaryWriter()
-from Models import DeltaHedge
 
 from stable_baselines3 import PPO, DQN
-import Utils
-
-import numpy as np
-import matplotlib.pyplot as plt
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.vec_env import VecMonitor
-import gym
-
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 class FigureRecorderCallback(BaseCallback):
     def __init__(self, test_env, verbose=0):

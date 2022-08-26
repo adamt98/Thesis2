@@ -1,5 +1,5 @@
 from Environments import DiscreteEnv
-from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv3
+from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3
 from Generators import GBM_Generator
 import Utils
 import numpy as np
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         "ttm" : ttm,
         "kappa" : kappa,
         "cost_multiplier" : cost_multiplier,
-        "reward_type" : "static", # "static"
+        "reward_type" : "static", # "static" or "basic"
         "testing" : True,
         "n_puts_sold" : n_puts_sold,
         "min_action" : min_action,

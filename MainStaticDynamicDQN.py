@@ -1,44 +1,19 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.14.0
-# ---
-
-from cProfile import label
-from math import gamma
-from re import T
 from typing import Callable
-
 import gym
-from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv3
-from Generators import GBM_Generator
-import Models
-import Utils
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import torch
-from torch.utils.tensorboard import SummaryWriter
-#writer = SummaryWriter()
-from Models import DeltaHedge
 
-from stable_baselines3 import PPO, DQN
+from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3
+from Generators import GBM_Generator
+from Models import DeltaHedge
 import Utils
 
-import numpy as np
-import matplotlib.pyplot as plt
-
+from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.vec_env import VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 class FigureRecorderCallback(BaseCallback):
     def __init__(self, test_env, verbose=0):
@@ -88,7 +63,7 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
         
     return _init
 
-# #### Environment config ###############
+###### Environment config ###############
 
 sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
@@ -120,26 +95,20 @@ env_args = {
     "max_sellable_puts" : max_sellable_puts
 }
 
-
 num_cpu = 7
+n_sim = 100
+observe_dim = 4
 
 ##########################################
-##### PPO Training hyperparameter setup ######
-n_sim = 100
-observe_dim = 4 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+##### DQN Training hyperparameter setup ######
 
-
-max_episodes = 50*40
-
-#epoch = int(50*240/7) # roll out 3000 episodes, then train
-#n_epochs = 5 # 5 <=> pass over the rollout 5 times
+max_episodes = 50*35000
 batch_size = 30
 
 policy_kwargs = dict(activation_fn=torch.nn.ReLU, # Du uses ReLU
                      net_arch=[50,50,50,50])
 
 gradient_max = 1.0
-
 buffer_size = 50*15000
 lstart = 50*1000 # after 1000 episodes
 train_freq = 50*30 # update policy net every 50 timesteps
@@ -148,7 +117,6 @@ target_update_interval = 50*5000 # default 10000 timesteps
 
 def lr(x : float): 
     return 1e-4 #1e-5 + (1e-4-1e-5)*x
-
 
 def simulate(env, obs):
     done = False
@@ -160,7 +128,6 @@ def simulate(env, obs):
 
 if __name__ == "__main__":
     env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
-
     model = DQN(policy="MlpPolicy",
                 policy_kwargs=policy_kwargs,
                 env=env,

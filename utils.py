@@ -1,24 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pyparsing import col
 from tqdm import tqdm
 from scipy.spatial.distance import jensenshannon as JS
-from Environments import DiscreteEnv
-import os
-plots_dir = "./plots/"
 import seaborn as sns
+plots_dir = "./plots/"
 
-class EpsFunction():
-    def __init__(self, total_steps):
-        self.total_steps = total_steps
-
-    def get_func(self):
-
-        def eps_func(step):
-            return 1 - step / self.total_steps
-
-        return eps_func
 
 def plot_decisions(delta, df):
     # initial stuff
@@ -181,20 +168,6 @@ def plot_pnl_hist(df):
     plt.title("Smoothed P&L Density")
     plt.savefig(plots_dir+"pnl_hist.png", bbox_inches="tight")
     plt.show()
-
-    # PnL paths graphs
-    # plt.figure(2, figsize=(18, 4))
-
-    # plt.subplot(121)
-    # for i in range(len(pnl_dict["model"])):
-    #     plt.plot(pnl_paths_dict["model"][i].cumsum().values, color='r', alpha=0.4)
-    # plt.title("PnL paths Model")
-
-    # plt.subplot(122)
-    # for i in range(len(pnl_dict["delta"])):
-    #     plt.plot(pnl_paths_dict["delta"][i].cumsum().values, color='r', alpha=0.4)
-    # plt.title("PnL paths Delta Hedge")
-    # plt.savefig(plots_dir+"pnl_paths.png")
 
     # Trading costs histogram
     sns.displot(df, x="Trading Cost", hue="Agent", kind="kde", fill=True, bw_adjust = 1.0, cut=0)

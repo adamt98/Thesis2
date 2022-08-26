@@ -1,0 +1,19 @@
+gamma =0.9
+kappa =0.1
+minmax = [-100, 300]
+maxep = 50*20000
+batch=30
+epoch=50*300/7 -> 300 episodes
+n_epochs = 5
+grad_max = 1.0
+gae lambda = 0.9
+value = 0.5
+entropy = 0.1
+surrogate loss clip = 0.25
+lr linear 1e-3 to 1e-4
+[30,30,30] [50,50]
+barr = 97
+
+BarrEnv2
+
+NOT PERFORMING VERY WELLs

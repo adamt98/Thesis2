@@ -1,26 +1,15 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.14.0
-# ---
-
 from cProfile import label
 from re import T
 from typing import Callable
 
 import gym
-from Environments2 import BarrierEnv, BarrierEnv2
+from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv4, BarrierEnv3
 from Generators import GBM_Generator
 import Models
 import Utils
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -44,8 +33,7 @@ class FigureRecorderCallback(BaseCallback):
     def _on_step(self): return True
 
     def _on_rollout_end(self):
-        figure = plt.figure()
-
+        
         obs = self.test_env.reset()
         done = False
         while not done:
@@ -54,17 +42,24 @@ class FigureRecorderCallback(BaseCallback):
         
     
         model_actions = info['output'].actions.values
-
+        #model_actions_opt = info['output'].actions_opt.values
         # delta hedge benchmark
         obs = self.test_env.reset()
-        delta_agent = DeltaHedge(self.test_env.generator.initial, n_puts_sold=n_puts_sold, min_action=min_action)
-        delta_actions = delta_agent.test(self.test_env, obs).actions.values
+        delta_agent = DeltaHedge(self.test_env.generator.initial, n_puts_sold=n_puts_sold, min_action=min_action, put_K = put_strike)
+        delta_out = delta_agent.test(self.test_env, obs)
+        delta_actions = delta_out.actions.values
+        #delta_actions_opt = delta_out.actions_opt.values
 
+        figure = plt.figure()
         figure.add_subplot().plot(delta_actions, 'b-', model_actions, 'g-')
-        
-        # Close the figure after logging it
-        self.logger.record("trajectory/figure", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+        self.logger.record("trajectory/figure/und", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
         plt.close()
+
+        # figure = plt.figure()
+        # figure.add_subplot().plot(delta_actions_opt, 'b-', model_actions_opt, 'g-')
+        # self.logger.record("trajectory/figure/opt", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+        # plt.close()
+
         return True
 
 def make_env(env_args, rank: int, seed: int = 0) -> Callable:
@@ -78,7 +73,7 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
     :return: (Callable)
     """
     def _init() -> gym.Env:
-        env = BarrierEnv(**env_args)
+        env = BarrierEnv2(**env_args)
         env.seed(seed + rank)
         return env
         
@@ -86,20 +81,23 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
 
 # #### Environment config ###############
 
-sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
+sigma = 0.35 #0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 #0.2 corresponds to trading freq of 5x per day
 ttm = 50 # 50 & freq=0.2 => 10 days expiry
-kappa = 1.0
-cost_multiplier = 0.0
-discount = 0.99
+kappa = 0.1
+cost_multiplier = 0.3
+discount = 0.9
 
-barrier = 90
-n_puts_sold = 1
+put_strike = 100
+
+barrier = 97
+n_puts_sold = 1 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 min_action = -100
-max_action = 100
+max_action = 300
 action_num = max_action - min_action
+#max_sellable_puts=1
 
 generator = GBM_Generator(S0, r, sigma, freq, barrier=barrier)
 env_args = {
@@ -111,7 +109,9 @@ env_args = {
     "testing" : False,
     "n_puts_sold" : n_puts_sold,
     "min_action" : min_action,
-    "max_action" : max_action
+    "max_action" : max_action,
+    #"max_sellable_puts" : max_sellable_puts,
+    #"put_K" : put_strike
 }
 
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -121,28 +121,29 @@ num_cpu = 7
 ##########################################
 ##### PPO Training hyperparameter setup ######
 n_sim = 100
-observe_dim = 3
+observe_dim = 4 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-max_episodes = 50*15000
+max_episodes = 50*25000
 
-epoch = int(50*240/7) # roll out 3000 episodes, then train
-n_epochs = 15 # 5 <=> pass over the rollout 5 times
+epoch = int(50*300/7) # roll out 240 episodes, then train
+n_epochs = 5 # 5 <=> pass over the rollout 5 times
 batch_size = 30
 
 policy_kwargs = dict(activation_fn=torch.nn.Tanh,
-                     net_arch=[dict(pi=[20,20,20], vf=[40,40])]) # dict(pi=[10], vf=[10])
+                     net_arch=[dict(pi=[20,20,20,20], vf=[50,50])])
 
 gradient_max = 1.0
 gae_lambda = 0.9
-value_weight = 0.8
-entropy_weight = 0.1
+value_weight = 0.6
+entropy_weight = 0.13
+
+def surrogate_loss_clip(x : float):
+    return 0.25 #0.15 + (0.35 - 0.15)*x  
 
 def lr(x : float): 
-    return 3e-5 #1e-4 + (1e-3-1e-4)*x
+    return 1e-4 + (1e-3 - 1e-4)*x
 
-#lr=3e-5
-surrogate_loss_clip = 0.25 # min and max acceptable KL divergence
 
 def simulate(env, obs):
     done = False
@@ -152,22 +153,37 @@ def simulate(env, obs):
     
     return info['output']
 
+from stable_baselines3.common.env_checker import check_env
+
 if __name__ == "__main__":
-    env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
+    generator = GBM_Generator(100, 0, 0.16, freq, barrier=barrier)
+    hits = 0
+    total = 1000
+    for i in range(total):
+        generator.reset_with_seed(i)
+        for j in range(150):
+            if generator.get_next() <= 97:
+                hits += 1
+                break
+
+    print(hits/total)
+    print("done")
     # vals = []
     # vals2 = []
     # deltas = []
     # delta2 = []
-    # spots = np.arange(40, 120, 0.1)
+    # spots = np.arange(80, 120, 0.05)
     # for spot in spots:
-    #     ttm1 = 1
-    #     barrier = 90
+    #     ttm1 = 50
+    #     barrier = 97
+    #     K = 100
+    #     K1 = 97.0
     #     generator = GBM_Generator(spot, r, sigma, freq, barrier=barrier)
-    #     val = generator.get_barrier_value(K=100, ttm=ttm1, up=False, out=False, call=False)
-    #     val2 = generator.get_option_value(K=100, ttm=ttm1, call=False)
-    #     delta_barr = generator.get_DIP_delta(spot, K=100, ttm=ttm1) 
+    #     val = generator.get_barrier_value(K=K, ttm=ttm1, up=False, out=False, call=False)
+    #     val2 = generator.get_option_value(K=K1, ttm=ttm1, call=False)
+    #     delta_barr = generator.get_DIP_vega(spot, K=K, ttm=ttm1) 
         
-    #     delta_static = generator.get_delta(spot, 100, ttm1) - 1 # get_delta gives call delta, we're selling a put
+    #     delta_static = generator.get_vega(spot, K1, ttm1)# - 1 # get_delta gives call delta, we're selling a put
     #     delta2.append(delta_static)
         
     #     vals.append(val)
@@ -209,6 +225,8 @@ if __name__ == "__main__":
     # plt.plot(unds)
     # plt.show()
 
+    env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
+    #env = BarrierEnv3(**env_args)
     model = PPO(policy="MlpPolicy", 
                 policy_kwargs=policy_kwargs,
                 env=env,
@@ -236,12 +254,14 @@ if __name__ == "__main__":
         "testing" : True,
         "n_puts_sold" : n_puts_sold,
         "min_action" : min_action,
-        "max_action" : max_action
+        "max_action" : max_action,
+        #"max_sellable_puts" : max_sellable_puts,
+        #"put_K" : put_strike
     }
 
-    test_env = BarrierEnv(**test_env_args)
+    test_env = BarrierEnv2(**test_env_args)
 
-    model.learn(total_timesteps=max_episodes, callback=FigureRecorderCallback(test_env))
+    model.learn(total_timesteps=max_episodes, callback=FigureRecorderCallback(test_env)) # 
     model.save('./weights_PPO/')
 
     #####################################
@@ -251,12 +271,18 @@ if __name__ == "__main__":
     obs = test_env.reset()
     df = simulate(test_env, obs)
     # delta hedge benchmark
-    delta_agent = DeltaHedge(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action)
+    delta_agent = DeltaHedge(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action, put_K = put_strike)
     obs = test_env.reset()
     delta = delta_agent.test(test_env, obs)
 
     Utils.plot_decisions(delta, df)
-    Utils.plot_pnl(delta, df)
+    #Utils.plot_decisions_extra(delta, df)
 
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = Utils.simulate_pnl(delta_agent, n_sim, test_env, simulate)
-    Utils.plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict)
+    outPPO = Utils.simulate_pnl("PPO", n_sim, test_env, simulate)
+    outDelta = Utils.simulate_pnl("Delta", n_sim, test_env, delta_agent.test)
+    out = pd.concat([outPPO, outDelta], ignore_index=True)
+    Utils.plot_pnl_hist(out)
+    Utils.perf_measures(out)
+    js = Utils.getJSDivergence(outPPO, outDelta)
+    print("JS divergence table:")
+    print(js.head())

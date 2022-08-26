@@ -1,4 +1,12 @@
 *.pyc
 __pycache__/*
 plots/*.png
-DQN_weights/*
+joint plots/*
+plots/*
+runs/*
+runsDQN/*
+networks/*/*/*/*/*.png
+networks/*/*/*/*/table.txt
+networks/*/*/*/*/*.0
+networks/*/*/*/table.txt
+networks/*/*/*/*.0

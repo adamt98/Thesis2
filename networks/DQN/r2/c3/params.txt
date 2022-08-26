@@ -1,0 +1,19 @@
+gamma=0.85
+cost=0.3
+kappa=0.1
+barrier=97
+minmax= -100, 300
+maxep=50*40000
+batch=30
+netarch= relu [50,50,50,50]
+gradmax=1
+buffer=750k
+lstart=50*1000
+trainfreq=50*30
+gradsteps=50*30
+target update = 50*5000
+lr 1e-4
+expl frac, init, final = 0.9, 1.0, 0.05
+
+barrenv2
+not better than delta

@@ -1,11 +1,28 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: ipynb,py:light
+#     text_representation:
+#       extension: .py
+#       format_name: light
+#       format_version: '1.5'
+#       jupytext_version: 1.14.0
+# ---
+
+from cProfile import label
+from math import gamma
+from re import T
 from typing import Callable
-from Environments import DiscreteEnv
+
+import gym
+from Environments2 import BarrierEnv, BarrierEnv2, BarrierEnv3
 from Generators import GBM_Generator
 import Models
 import Utils
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -17,12 +34,11 @@ import Utils
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.vec_env import VecMonitor
-import gym
-
 
 class FigureRecorderCallback(BaseCallback):
     def __init__(self, test_env, verbose=0):
@@ -45,7 +61,7 @@ class FigureRecorderCallback(BaseCallback):
 
         # delta hedge benchmark
         obs = self.test_env.reset()
-        delta_agent = DeltaHedge(self.test_env.generator.initial)
+        delta_agent = DeltaHedge(self.test_env.generator.initial, n_puts_sold=n_puts_sold, min_action=min_action)
         delta_actions = delta_agent.test(self.test_env, obs).actions.values
 
         figure.add_subplot().plot(delta_actions, 'b-', model_actions, 'g-')
@@ -66,83 +82,72 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
     :return: (Callable)
     """
     def _init() -> gym.Env:
-        env = DiscreteEnv(**env_args)
+        env = BarrierEnv3(**env_args)
         env.seed(seed + rank)
         return env
         
     return _init
-    
-##### Environment config ###############
+
+# #### Environment config ###############
 
 sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
 freq = 0.2 #0.2 corresponds to trading freq of 5x per day
 ttm = 50 # 50 & freq=0.2 => 10 days expiry
-kappa = 0.1 # .3
-cost_multiplier = 0.5
+kappa = 1.0
+cost_multiplier = 0.0
 discount = 0.85
 
-generator = GBM_Generator(S0, r, sigma, freq)
+barrier = 97
+n_puts_sold = 0
+min_action = 0
+max_action = 400
+action_num = max_action - min_action
+max_sellable_puts = 5
+
+generator = GBM_Generator(S0, r, sigma, freq, barrier=barrier)
 env_args = {
     "generator" : generator,
     "ttm" : ttm,
     "kappa" : kappa,
     "cost_multiplier" : cost_multiplier,
-    "reward_type" : "basic",
-    "testing" : False
+    "reward_type" : "static",
+    "testing" : False,
+    #"n_puts_sold" : n_puts_sold,
+    "min_action" : min_action,
+    "max_action" : max_action,
+    "max_sellable_puts" : max_sellable_puts
 }
 
-env = DiscreteEnv(**env_args)
+
+num_cpu = 7
 
 ##########################################
 ##### PPO Training hyperparameter setup ######
-# n_sim = 100
-# observe_dim = 3
-# action_num = 101
-
-# max_episodes = 50*12000
-
-# epoch = 3000 # roll out 3000 episodes, then train
-# n_epochs = 5 # 5 <=> pass over the rollout 5 times
-# batch_size = 30
-
-# policy_kwargs = dict(activation_fn=torch.nn.Tanh,
-#                      net_arch=[dict(pi=[20,20,20], vf=[40,40])]) 
-
-# gradient_max = 1.0
-# gae_lambda = 0.9
-# value_weight = 0.8
-# entropy_weight = 0.1
-# surrogate_loss_clip = 0.25 # min and max acceptable KL divergence
-
-##########################################
-##### DQN Training hyperparameter setup ######
-num_cpu=7
 n_sim = 100
-observe_dim = 3
-action_num = 101
+observe_dim = 4 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-max_episodes = 50*38001
 
-#epoch = int(50*3000) # roll out 3000 episodes, then train
-#n_epochs = 2 # 5 <=> pass over the rollout 5 times
+max_episodes = 50*40
+
+#epoch = int(50*240/7) # roll out 3000 episodes, then train
+#n_epochs = 5 # 5 <=> pass over the rollout 5 times
 batch_size = 30
 
-
 policy_kwargs = dict(activation_fn=torch.nn.ReLU, # Du uses ReLU
-                     net_arch=[30,30,30,30])
+                     net_arch=[50,50,50,50])
 
 gradient_max = 1.0
 
 buffer_size = 50*15000
-lstart = 50*800 # after 1000 episodes
-train_freq = 50 # update policy net every 100 episodes
-grad_steps = 50 # default 1
-target_update_interval = 50*1000 # default 3000 episodes
+lstart = 50*1000 # after 1000 episodes
+train_freq = 50*30 # update policy net every 50 timesteps
+grad_steps = 50*30 # default 1
+target_update_interval = 50*5000 # default 10000 timesteps
 
 def lr(x : float): 
-    return 1e-5 + (7e-5 - 1e-5)*x
+    return 1e-4 #1e-5 + (1e-4-1e-5)*x
 
 
 def simulate(env, obs):
@@ -154,23 +159,6 @@ def simulate(env, obs):
     return info['output']
 
 if __name__ == "__main__":
-
-    # model = PPO(policy="MlpPolicy", 
-    #             policy_kwargs=policy_kwargs,
-    #             env=env,
-    #             learning_rate=lr, 
-    #             n_steps = epoch,
-    #             batch_size=batch_size,
-    #             n_epochs=n_epochs,
-    #             gamma = discount,
-    #             gae_lambda=gae_lambda,
-    #             clip_range=surrogate_loss_clip,
-    #             normalize_advantage=True,
-    #             ent_coef=entropy_weight,
-    #             vf_coef=value_weight,
-    #             max_grad_norm=gradient_max,
-    #             tensorboard_log='./runs/',
-    #             verbose=1)
     env = VecMonitor(SubprocVecEnv([make_env(env_args, i) for i in range(num_cpu)]))
 
     model = DQN(policy="MlpPolicy",
@@ -192,19 +180,23 @@ if __name__ == "__main__":
                 verbose=1
                 )
 
-    generator = GBM_Generator(S0, r, sigma, freq, seed=123)
+    generator = GBM_Generator(S0, r, sigma, freq, seed=123, barrier=barrier)
     test_env_args = {
         "generator" : generator,
         "ttm" : ttm,
         "kappa" : kappa,
         "cost_multiplier" : cost_multiplier,
-        "reward_type" : "basic",
-        "testing" : True
+        "reward_type" : "static",
+        "testing" : True,
+        #"n_puts_sold" : n_puts_sold,
+        "min_action" : min_action,
+        "max_action" : max_action,
+        "max_sellable_puts" : max_sellable_puts
     }
 
-    test_env = DiscreteEnv(**test_env_args)
+    test_env = BarrierEnv3(**test_env_args)
 
-    model.learn(total_timesteps=max_episodes, callback=FigureRecorderCallback(test_env))
+    model.learn(total_timesteps=max_episodes , callback=FigureRecorderCallback(test_env))
     model.save('./weights_DQN/')
 
     #####################################
@@ -214,7 +206,7 @@ if __name__ == "__main__":
     obs = test_env.reset()
     df = simulate(test_env, obs)
     # delta hedge benchmark
-    delta_agent = DeltaHedge(generator.initial)
+    delta_agent = DeltaHedge(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action)
     obs = test_env.reset()
     delta = delta_agent.test(test_env, obs)
 

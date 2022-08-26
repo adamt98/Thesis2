@@ -1,0 +1,19 @@
+kappa=0.1
+c=3
+gamma=0.85
+barr=97
+minmax=[0,400]
+maxep=50*40000
+batch=30
+netarch= relu [50,50,50,50]
+gradmax=1
+buffer=50*15000
+lstart=50*1000
+gradsteps=trainfreq=50*30
+target update = 50*5000
+lr=1e-4
+expfrac,expinit,expfin=0.9,1.0,0.05
+
+BarrEnv2
+
+similar to delta

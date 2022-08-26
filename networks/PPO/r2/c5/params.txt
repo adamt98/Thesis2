@@ -1,0 +1,18 @@
+gamma=0.9
+c=0.5
+kappa=0.1
+barr=97
+minmax = -100,300
+maxep=50*25000
+epoch=300*50/7
+n_epochs=5
+batch=30
+netarch= tanh [20,20,20,20] [50,50]
+gradmax=1
+lambda=0.9
+value=0.6
+entropy=0.13
+lossclip=0.25
+lr= 1e-3 linear 1e-4
+
+not great results

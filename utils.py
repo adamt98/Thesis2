@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pyparsing import col
 from tqdm import tqdm
-
+from scipy.spatial.distance import jensenshannon as JS
 from Environments import DiscreteEnv
 import os
 plots_dir = "./plots/"
+import seaborn as sns
 
 class EpsFunction():
     def __init__(self, total_steps):
@@ -19,157 +21,253 @@ class EpsFunction():
         return eps_func
 
 def plot_decisions(delta, df):
-    # underlying & option values
-    plt.figure(1, figsize=(12, 6))
-    plt.subplot(121)
-    plt.plot(delta.underlying)
-    plt.title("underlying")
-    plt.subplot(122)
-    plt.plot(delta.option)
-    plt.title("option value")
-
-    plt.savefig(plots_dir+"underlying_path.png")
-    delta_holdings = delta.holdings.values 
-    delta_actions = delta.actions.values 
-    model_holdings = df.holdings.values
-    model_actions = df.actions.values
-
-    plt.figure(2, figsize=(12, 8))
-    # Holdings
-    plt.subplot(211)
-    plt.plot(delta_holdings, label='delta')
-    plt.plot(model_holdings, label='model')
-    plt.title("Holdings")
-    plt.legend()
-
-    # Actions
-    plt.subplot(212)
-    plt.plot(delta_actions, label='delta')
-    plt.plot(model_actions, label='model')
-    plt.title("Actions")
-    plt.legend()
-
-    plt.savefig(plots_dir+"decisions.png")
+    # initial stuff
+    sns.set_theme(style="darkgrid")
+    delta['time'] = delta.index
+    df['time'] = df.index
+    
+    # Underlying value
+    sns.relplot(data=delta, kind="line", x="time", y="underlying")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.title("Underlying value")
+    plt.savefig(plots_dir+"und_value.png", bbox_inches="tight")
     plt.show()
 
-def plot_pnl(delta, df):
-    plt.figure(3, figsize=(12, 8))
+    # Option value
+    sns.relplot(data=delta, kind="line", x="time", y="option")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.title("Option value")
+    plt.savefig(plots_dir+"opt_value.png", bbox_inches="tight")
+    plt.show()
 
-    plt.subplot(221)
+    # Holdings
+    plt.plot(delta.holdings, label = "delta")
+    plt.plot(df.holdings, label = "model")
+    plt.xlabel("Time")
+    plt.ylabel("Holdings")
+    plt.title("Agent's position")
+    plt.legend()
+    plt.savefig(plots_dir+"holdings.png", bbox_inches="tight")
+    plt.show()
+    
+    # Rewards
     plt.plot(delta.rewards, label='delta')
     plt.plot(df.rewards, label='model')
+    plt.xlabel("Time")
+    plt.ylabel("Reward")
     plt.title("Rewards")
     plt.legend()
+    plt.savefig(plots_dir+"rewards.png", bbox_inches="tight")
+    plt.show()
 
-
-    plt.subplot(222)
+    # Cumulative PnL
     plt.plot(delta.pnl.cumsum(), label='delta')
     plt.plot(df.pnl.cumsum().values, label='model')
-    plt.title("Cumulative PnL")
+    plt.xlabel("Time")
+    plt.ylabel("P&L")
+    plt.title("Cumulative P&L")
     plt.legend()
+    plt.savefig(plots_dir+"cumPnL.png", bbox_inches="tight")
+    plt.show()
 
-    plt.subplot(223)
+    # Costs
     plt.plot(delta.cost, label='delta')
     plt.plot(df.cost, label='model')
-    plt.title("Trading Costs")
+    plt.xlabel("Time")
+    plt.ylabel("Cost")
+    plt.title("Cumulative Trading Costs")
     plt.legend()
+    plt.savefig(plots_dir+"cumCost.png", bbox_inches="tight")
+    plt.show()
 
-    plt.subplot(224)
+    # Number of Trades
     plt.plot(delta.trades, label='delta')
     plt.plot(df.trades, label='model')
-    plt.title("Num. of Trades")
+    plt.xlabel("Time")
+    plt.ylabel("Amount")
+    plt.title("Cumulative Number of Trades")
     plt.legend()
-
-    plt.savefig(plots_dir+"pnl.png")
+    plt.savefig(plots_dir+"cumNTrades.png", bbox_inches="tight")
     plt.show()
 
-def plot_pnl_hist(pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict):
-    # Joint final PnL histograms
-    plt.figure(1, figsize=(9, 6))
-    binwidth = 20
-    minimum = min(min(pnl_dict["model"]), min(pnl_dict["delta"]))
-    maximum = max(max(pnl_dict["model"]), max(pnl_dict["delta"]))
-    plt.hist(pnl_dict["model"], label="model", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.hist(pnl_dict["delta"], label="delta", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.title("PnL Histograms")
+def plot_decisions2(df : pd.DataFrame):
+    # initial stuff
+    sns.set_theme(style="darkgrid")
+    
+    
+    # Underlying value
+    dfDelta = df.query("Agent == 'Delta'")
+    sns.relplot(data=dfDelta, kind="line", x="time", y="underlying")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.title("Underlying value")
+    plt.savefig(plots_dir+"und_value.png", bbox_inches="tight")
+    plt.show()
+
+    # Option value
+    sns.relplot(data=dfDelta, kind="line", x="time", y="option")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.title("Option value")
+    plt.savefig(plots_dir+"opt_value.png", bbox_inches="tight")
+    plt.show()
+
+    # Holdings
+    sns.relplot(data=df, kind="line", x="time", y="holdings", hue="Agent")
+    plt.xlabel("Time")
+    plt.ylabel("Holdings")
+    plt.title("Agent's position")
     plt.legend()
-    plt.savefig(plots_dir+"pnl_hist.png")
+    plt.savefig(plots_dir+"holdings.png", bbox_inches="tight")
+    plt.show()
+    
+    # Rewards
+    sns.relplot(data=df, kind="line", x="time", y="rewards", hue="Agent")
+    plt.xlabel("Time")
+    plt.ylabel("Reward")
+    plt.title("Rewards")
+    plt.legend()
+    plt.savefig(plots_dir+"rewards.png", bbox_inches="tight")
+    plt.show()
+
+    # Cumulative PnL
+    df["cumPnL"] = df.groupby(["Agent"]).pnl.cumsum()
+    sns.relplot(data=df, kind="line", x="time", y="cumPnL", hue="Agent")
+    plt.xlabel("Time")
+    plt.ylabel("P&L")
+    plt.title("Cumulative P&L")
+    plt.legend()
+    plt.savefig(plots_dir+"cumPnL.png", bbox_inches="tight")
+    plt.show()
+
+    # Costs
+    sns.relplot(data=df, kind="line", x="time", y="cost", hue="Agent")
+    plt.xlabel("Time")
+    plt.ylabel("Cost")
+    plt.title("Cumulative Trading Costs")
+    plt.legend()
+    plt.savefig(plots_dir+"cumCost.png", bbox_inches="tight")
+    plt.show()
+
+    # Number of Trades
+    sns.relplot(data=df, kind="line", x="time", y="trades", hue="Agent")
+    plt.xlabel("Time")
+    plt.ylabel("Amount")
+    plt.title("Cumulative Number of Trades")
+    plt.legend()
+    plt.savefig(plots_dir+"cumNTrades.png", bbox_inches="tight")
+    plt.show()
+
+def plot_decisions_extra(delta,df):
+    # initial stuff
+    delta['time'] = delta.index
+    df['time'] = df.index
+
+    # Holdings
+    plt.plot(delta.actions_opt, label = "delta")
+    plt.plot(df.actions_opt, label = "model")
+    plt.xlabel("Time")
+    plt.ylabel("Option's Holdings")
+    plt.title("Agent's position")
+    plt.legend()
+    plt.savefig(plots_dir+"holdings_opt.png", bbox_inches="tight")
+    plt.show()
+
+def plot_pnl_hist(df):
+
+    sns.displot(df, x="P&L", hue="Agent", kind="kde", fill=True, bw_adjust = 1.0)
+    plt.title("Smoothed P&L Density")
+    plt.savefig(plots_dir+"pnl_hist.png", bbox_inches="tight")
+    plt.show()
 
     # PnL paths graphs
-    plt.figure(2, figsize=(18, 4))
+    # plt.figure(2, figsize=(18, 4))
 
-    plt.subplot(121)
-    for i in range(len(pnl_dict["model"])):
-        plt.plot(pnl_paths_dict["model"][i].cumsum().values, color='r', alpha=0.4)
-    plt.title("PnL paths Model")
+    # plt.subplot(121)
+    # for i in range(len(pnl_dict["model"])):
+    #     plt.plot(pnl_paths_dict["model"][i].cumsum().values, color='r', alpha=0.4)
+    # plt.title("PnL paths Model")
 
-    plt.subplot(122)
-    for i in range(len(pnl_dict["delta"])):
-        plt.plot(pnl_paths_dict["delta"][i].cumsum().values, color='r', alpha=0.4)
-    plt.title("PnL paths Delta Hedge")
-    plt.savefig(plots_dir+"pnl_paths.png")
+    # plt.subplot(122)
+    # for i in range(len(pnl_dict["delta"])):
+    #     plt.plot(pnl_paths_dict["delta"][i].cumsum().values, color='r', alpha=0.4)
+    # plt.title("PnL paths Delta Hedge")
+    # plt.savefig(plots_dir+"pnl_paths.png")
 
-    # Trades and Costs histograms
-    plt.figure(3, figsize=(12, 6))
-
-    plt.subplot(121)
-    binwidth = 20
-    minimum = min(min(tcosts_dict["model"]), min(tcosts_dict["delta"]))
-    maximum = max(max(tcosts_dict["model"]), max(tcosts_dict["delta"]))
-    plt.hist(tcosts_dict["model"], label = "Model", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.hist(tcosts_dict["delta"], label = "Delta Hedge", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.title("Trading costs histogram")
-    plt.legend()
-
-    plt.subplot(122)
-    binwidth = 1
-    minimum = min(min(ntrades_dict["model"]), min(ntrades_dict["delta"]))
-    maximum = max(max(ntrades_dict["model"]), max(ntrades_dict["delta"]))
-    plt.hist(ntrades_dict["model"], label = "Model", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.hist(ntrades_dict["delta"], label = "Delta Hedge", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.title("Number of trades histogram")
-    plt.legend()
-    plt.savefig(plots_dir+"ntrades_cost_hist.png")
-
-    model_pnl_std = []
-    delta_pnl_std = []
-    for i in range(len(pnl_dict["model"])):
-        model_pnl_std.append(np.std(pnl_paths_dict["model"][i]))
-        delta_pnl_std.append(np.std(pnl_paths_dict["delta"][i]))
-
-
-    plt.figure(4, figsize=(9,6))
-    binwidth = 1
-    minimum = min(min(model_pnl_std), min(delta_pnl_std))
-    maximum = max(max(model_pnl_std), max(delta_pnl_std))
-    plt.hist(model_pnl_std, label="model", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.hist(delta_pnl_std, label="delta", bins = np.arange(minimum, maximum + binwidth, binwidth))
-    plt.title("Histograms: Standard Deviation of PnL")
-    plt.legend()
-
-    plt.savefig(plots_dir+"std_hist.png")
+    # Trading costs histogram
+    sns.displot(df, x="Trading Cost", hue="Agent", kind="kde", fill=True, bw_adjust = 1.0, cut=0)
+    plt.title("Trading Costs Density")
+    plt.savefig(plots_dir+"cost_hist.png", bbox_inches="tight")
     plt.show()
     
-    plot1 = pd.DataFrame({"model": model_pnl_std, "delta":delta_pnl_std}).plot(kind='density')
-    plot1.get_figure().savefig(plots_dir+"std_density.png")
-
-def simulate_pnl(model_delta, n_steps, env, simulator_func):
-    pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict = {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}, {"model" : [], "delta" : []}
+    # Trades histogram
+    sns.displot(df, x="Number of Trades", hue="Agent", stat="density", fill=True)
+    plt.title("Number of trades histogram")
+    plt.savefig(plots_dir+"ntrades_hist.png", bbox_inches="tight")
+    plt.show()
     
+    # P&L Volatility
+    sns.displot(df, x="P&L Volatility", hue="Agent", kind="kde", fill=True, bw_adjust = 1.0, cut=0)
+    plt.title("P&L Volatility")
+    plt.savefig(plots_dir+"std_hist.png", bbox_inches="tight")
+    plt.show()
+
+def simulate_pnl(name, n_steps, env, simulator_func):
+    data = []
     for i in tqdm(range(n_steps)):
-        
-        for key in ["model","delta"]:
-            # Perform DRL testing
-            obs = env.reset_with_seed(11301*i)
-            
-            if key == "model":
-                df = simulator_func(env, obs)
-            else:
-                df = model_delta.test(env, obs)
+        obs = env.reset_with_seed(11301*i)
+        df = simulator_func(env, obs)
+        data.append([df.pnl.cumsum().values[-1], df.cost.values[-1], df.trades.values[-1], df.pnl, df.pnl.std(), name])
 
-            pnl_paths_dict[key].append(df.pnl)
-            pnl_dict[key].append(df.pnl.cumsum().values[-1])
-            tcosts_dict[key].append(df.cost.values[-1])
-            ntrades_dict[key].append(df.trades.values[-1])
+    out = pd.DataFrame(data, columns=["P&L","Trading Cost","Number of Trades", "P&L Paths", "P&L Volatility", "Agent"])
+    return out
 
-    return pnl_paths_dict, pnl_dict, tcosts_dict, ntrades_dict
+def perf_measures(df : pd.DataFrame):
+    # dist mean, stdev, min, max, skew, kurtosis, VaR
+    def getStats(df, colName):
+        pnl_measures = {
+            "mean" : df[colName].mean(),
+            "volatility": df[colName].std(),
+            "min": df[colName].min(),
+            "max": df[colName].max(),
+            "skew": df[colName].skew(), 
+            "kurtosis": df[colName].kurtosis(),
+            "VaR.05": df[colName].quantile(0.05)
+        }
+        return pd.DataFrame(pnl_measures, index=[0])
+
+    # final PnL 
+    pnlStats = df.groupby("Agent").apply(lambda x : getStats(x, "P&L"))
+
+    # tcosts 
+    tcostStats = df.groupby("Agent").apply(lambda x : getStats(x, "Trading Cost"))
+    
+    # nTrades 
+    nTradesStats = df.groupby("Agent").apply(lambda x : getStats(x, "Number of Trades"))
+    
+    # Volatility 
+    volStats = df.groupby("Agent").apply(lambda x : getStats(x, "P&L Volatility"))
+    
+
+    print("P&L:")
+    print(pnlStats.head(10))
+    print("T-cost stats:")
+    print(tcostStats.head(10))
+    print("n trades stats:")
+    print(nTradesStats.head(10))
+    print("Vol stats:")
+    print(volStats.head(10))
+    return None
+
+def getJSDivergence(df1, df2):
+    def getDiv(colName):
+        binned1, _ = np.histogram(df1[colName], bins=20)
+        binned2, _ = np.histogram(df2[colName], bins=20)
+        return JS(binned1, binned2)**2
+
+    cols = ["P&L","Trading Cost","Number of Trades","P&L Volatility"]
+    vals = [getDiv(colName) for colName in cols]
+    return pd.DataFrame(vals, cols)
+

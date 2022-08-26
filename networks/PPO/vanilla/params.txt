@@ -1,0 +1,21 @@
+sigma = 0.01 /day
+r = 0
+S0 = 100
+freq = 0.2
+ttm = 50
+kappa = 1.0
+C = 0
+gamma = 0.9
+
+max_episodes = 50*15000
+n_epochs = 5
+batch size = 30
+
+policy net = act[20,20,20], cri[40,40], TanH
+grad max = 1.0
+GAE lambda = 0.9
+value w = 0.9
+entropy w = 0.1
+
+lr = linear decay 1e-3 to 1e-5
+surrogate clip = 0.25

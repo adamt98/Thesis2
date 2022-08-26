@@ -1,0 +1,13 @@
+kappa=.1
+gamma=.85
+c=3
+maxep=50*38000
+batch=30
+policy=relu[30,30,30,30]
+gradmax=1
+buffer=50*15000
+lstart=50*800
+trainfreq=50
+gradsteps=50
+targetupdate=50*1000
+lr linear 7e-5 1e-5

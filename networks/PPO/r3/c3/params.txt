@@ -1,0 +1,15 @@
+put_strike=100
+barrier=97
+minmax=-100,300
+maxputssold=1
+maxep=50*20000
+epoch=50*300/7
+n_epochs=5
+batch=30
+netarch= tanh act[30,30,30,30] cri[50,50,50]
+gradmax=1
+lambda=0.9
+value=0.7
+entropy=0.09
+lossclip=0.35
+lr= 1e-3 to 1e-4

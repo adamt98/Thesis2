@@ -1,0 +1,14 @@
+c=0
+gamma=0.9
+barrier=97
+maxep=50*55000
+batch=30
+arch=relu[40,40,40,40]
+gradmax=1
+buffer=750000
+lstart=50*800
+trainfreq=gradsteps=50
+targ update=50*1000
+lr 1e-4 to 1e-5
+finaleps=0.05
+epsfrac=0.9

@@ -1,0 +1,12 @@
+gamma=0.85
+kappa=0.3
+maxepisodes=50*28001
+gradmax=1.0
+buffer=50*15000
+lstart=50*800
+trainfreq=50
+gradsteps=50
+targetupdate=50*1000
+arch=[30,30,30,30]
+lr linear 7e-5 1e-5
+exploration: frac=0.9, init=1.0, final=0.05

@@ -1,5 +1,5 @@
 from Environments import DiscreteEnv
-from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3, BarrierEnv4
+from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3#, BarrierEnv4
 
 # Delta Hedging benchmark
 class DeltaHedge():
@@ -11,11 +11,11 @@ class DeltaHedge():
         self.min_action = min_action
         self.put_K = put_K
     
-    def predict_action(self, state, env : DiscreteEnv | BarrierEnv | BarrierEnv2 | BarrierEnv3 | BarrierEnv4):
+    def predict_action(self, state, env : DiscreteEnv | BarrierEnv | BarrierEnv2 | BarrierEnv3):
         if type(env) == BarrierEnv2:
             _, spot, ttm, _ = env.denormalize_state(state)
-        elif type(env) == BarrierEnv4:
-            _, spot, _, ttm = env.denormalize_state(state)
+        # elif type(env) == BarrierEnv4:
+        #     _, spot, _, ttm = env.denormalize_state(state)
         elif type(env) == BarrierEnv3:
             _, spot, ttm, _, _ = env.denormalize_state(state)
         else:

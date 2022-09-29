@@ -2,6 +2,7 @@ from typing import Callable
 import gym
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
@@ -71,14 +72,14 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
 
 # #### Environment config ###############
 
-sigma = 0.35 #0.01*np.sqrt(250) # 1% vol per day, annualized
+sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
-freq = 0.2 #0.2 corresponds to trading freq of 5x per day
-ttm = 50 # 50 & freq=0.2 => 10 days expiry
+freq = 1 #0.2 corresponds to trading freq of 5x per day
+ttm = 30 # 50 & freq=0.2 => 10 days expiry
 kappa = 0.1
 cost_multiplier = 0.3
-discount = 0.9
+discount = 0.85
 
 put_strike = 100
 
@@ -100,8 +101,8 @@ env_args = {
     "n_puts_sold" : n_puts_sold,
     "min_action" : min_action,
     "max_action" : max_action,
-    #"max_sellable_puts" : max_sellable_puts,
-    #"put_K" : put_strike
+    # "max_sellable_puts" : max_sellable_puts,
+    # "put_K" : put_strike
 }
 
 
@@ -111,18 +112,18 @@ observe_dim = 4
 
 ##########################################
 ##### PPO Training hyperparameter setup ######
-max_episodes = 50*25000
+max_episodes = 50*20000
 epoch = int(50*300/7) # roll out 240 episodes, then train
 n_epochs = 5 # 5 <=> pass over the rollout 5 times
 batch_size = 30
 
 policy_kwargs = dict(activation_fn=torch.nn.Tanh,
-                     net_arch=[dict(pi=[20,20,20,20], vf=[50,50])])
+                     net_arch=[dict(pi=[30,30,30,30], vf=[40,40,40])])
 
 gradient_max = 1.0
 gae_lambda = 0.9
-value_weight = 0.6
-entropy_weight = 0.13
+value_weight = 0.7
+entropy_weight = 0.09
 
 def surrogate_loss_clip(x : float):
     return 0.25 #0.15 + (0.35 - 0.15)*x  
@@ -170,8 +171,8 @@ if __name__ == "__main__":
         "n_puts_sold" : n_puts_sold,
         "min_action" : min_action,
         "max_action" : max_action,
-        #"max_sellable_puts" : max_sellable_puts,
-        #"put_K" : put_strike
+        # "max_sellable_puts" : max_sellable_puts,
+        # "put_K" : put_strike
     }
 
     test_env = BarrierEnv2(**test_env_args)

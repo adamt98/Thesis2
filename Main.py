@@ -144,8 +144,37 @@ def simulate(env, obs):
     
     return info['output']
 
+from Generators import Heston
+from tqdm import tqdm
 if __name__ == "__main__":
+    K=100
+    ttm=50
+    paths = []
+    for j in range(1):
+        gen = Heston(S0=100, r=0.0, V0=0.03, rho=-0.7, kappa=3, theta=0.03, xi=0.3, freq=freq, n_sim=1000, barrier=95)
+    
+        und = []
+        opt = []
+        bar = []
+        for i in tqdm(range(3)):
+            p1 = gen.get_option_value(K, ttm, False)
+            p2 = gen.get_barrier_value(K, ttm, False, False, False)
+            #u = gen.get_next()
+            #und.append(u)
+            opt.append(p1)
+            bar.append(p2)
+    #paths.append(np.array(und))
+        #plt.plot(und)
+    
+    plt.plot(opt)
+    plt.show()
 
+    plt.plot(bar)
+    plt.show()
+    
+    #plt.plot(opt)
+    #plt.plot(bar)
+    #plt.show()
     # model = PPO(policy="MlpPolicy", 
     #             policy_kwargs=policy_kwargs,
     #             env=env,

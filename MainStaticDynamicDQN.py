@@ -36,7 +36,7 @@ class FigureRecorderCallback(BaseCallback):
 
         # delta hedge benchmark
         obs = self.test_env.reset()
-        delta_agent = DeltaHedge(self.test_env.generator.initial, n_puts_sold=n_puts_sold, min_action=min_action)
+        delta_agent = DeltaHedge(self.test_env.generator.initial, n_puts_sold=n_puts_sold, min_action=min_action, put_K=put_strike)
         delta_actions = delta_agent.test(self.test_env, obs).actions.values
 
         figure.add_subplot().plot(delta_actions, 'b-', model_actions, 'g-')
@@ -57,7 +57,7 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
     :return: (Callable)
     """
     def _init() -> gym.Env:
-        env = BarrierEnv3(**env_args)
+        env = BarrierEnv2(**env_args)
         env.seed(seed + rank)
         return env
         
@@ -68,18 +68,19 @@ def make_env(env_args, rank: int, seed: int = 0) -> Callable:
 sigma = 0.01*np.sqrt(250) # 1% vol per day, annualized
 r = 0.0 # Annualized
 S0 = 100
-freq = 0.2 #0.2 corresponds to trading freq of 5x per day
-ttm = 50 # 50 & freq=0.2 => 10 days expiry
-kappa = 1.0
-cost_multiplier = 0.0
+freq = 1 #0.2 corresponds to trading freq of 5x per day
+ttm = 30 # 50 & freq=0.2 => 10 days expiry
+kappa = 0.1
+cost_multiplier = 0.3
 discount = 0.85
 
 barrier = 97
-n_puts_sold = 0
-min_action = 0
-max_action = 400
+n_puts_sold = 1
+min_action = -100
+max_action = 300
 action_num = max_action - min_action
-max_sellable_puts = 5
+put_strike = 100
+#max_sellable_puts = 5
 
 generator = GBM_Generator(S0, r, sigma, freq, barrier=barrier)
 env_args = {
@@ -89,10 +90,10 @@ env_args = {
     "cost_multiplier" : cost_multiplier,
     "reward_type" : "static",
     "testing" : False,
-    #"n_puts_sold" : n_puts_sold,
+    "n_puts_sold" : n_puts_sold,
     "min_action" : min_action,
     "max_action" : max_action,
-    "max_sellable_puts" : max_sellable_puts
+    #"max_sellable_puts" : max_sellable_puts
 }
 
 num_cpu = 7
@@ -102,18 +103,18 @@ observe_dim = 4
 ##########################################
 ##### DQN Training hyperparameter setup ######
 
-max_episodes = 50*35000
+max_episodes = 30*35000
 batch_size = 30
 
 policy_kwargs = dict(activation_fn=torch.nn.ReLU, # Du uses ReLU
                      net_arch=[50,50,50,50])
 
 gradient_max = 1.0
-buffer_size = 50*15000
-lstart = 50*1000 # after 1000 episodes
-train_freq = 50*30 # update policy net every 50 timesteps
-grad_steps = 50*30 # default 1
-target_update_interval = 50*5000 # default 10000 timesteps
+buffer_size = 30*15000
+lstart = 30*1000 # after 1000 episodes
+train_freq = 30*30 # update policy net every 50 timesteps
+grad_steps = 30*30 # default 1
+target_update_interval = 30*5000 # default 10000 timesteps
 
 def lr(x : float): 
     return 1e-4 #1e-5 + (1e-4-1e-5)*x
@@ -155,13 +156,13 @@ if __name__ == "__main__":
         "cost_multiplier" : cost_multiplier,
         "reward_type" : "static",
         "testing" : True,
-        #"n_puts_sold" : n_puts_sold,
+        "n_puts_sold" : n_puts_sold,
         "min_action" : min_action,
         "max_action" : max_action,
-        "max_sellable_puts" : max_sellable_puts
+        # "max_sellable_puts" : max_sellable_puts
     }
 
-    test_env = BarrierEnv3(**test_env_args)
+    test_env = BarrierEnv2(**test_env_args)
 
     model.learn(total_timesteps=max_episodes , callback=FigureRecorderCallback(test_env))
     model.save('./weights_DQN/')
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     obs = test_env.reset()
     df = simulate(test_env, obs)
     # delta hedge benchmark
-    delta_agent = DeltaHedge(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action)
+    delta_agent = DeltaHedge(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action, put_K=put_strike)
     obs = test_env.reset()
     delta = delta_agent.test(test_env, obs)
 

@@ -1,6 +1,6 @@
 from Environments import DiscreteEnv
 from Environments import BarrierEnv, BarrierEnv2, BarrierEnv3
-from Generators import GBM_Generator
+from Generators import GBM_Generator, HestonGenerator
 import Utils
 import numpy as np
 import pandas as pd
@@ -18,6 +18,12 @@ kappa = 0.1
 cost_multiplier = 0.3
 discount = 0.9
 
+rho = -0.6
+theta = sigma*sigma
+xi = 0.1
+kappaH = 1.5
+
+
 barrier = 97
 n_puts_sold = 1
 put_strike = 100
@@ -26,20 +32,20 @@ max_action = 300
 action_num = max_action - min_action
 #max_sellable_puts = 1
 
-generator = GBM_Generator(S0, r, sigma, freq, barrier=barrier) # 
-env_args = {
-    "generator" : generator,
-    "ttm" : ttm,
-    "kappa" : kappa,
-    "cost_multiplier" : cost_multiplier,
-    "reward_type" : "static", # static, dynamic
-    "testing" : False,
-    "n_puts_sold" : n_puts_sold,
-    "min_action" : min_action,
-    "max_action" : max_action,
-    #"put_K" : put_strike,
-    #"max_sellable_puts" : max_sellable_puts
-}
+# generator = HestonGenerator(S0, put_strike, r, sigma*sigma, rho, kappaH, theta, xi, barrier, ttm)
+# env_args = {
+#     "generator" : generator,
+#     "ttm" : ttm,
+#     "kappa" : kappa,
+#     "cost_multiplier" : cost_multiplier,
+#     "reward_type" : "static", # static, dynamic
+#     "testing" : False,
+#     "n_puts_sold" : n_puts_sold,
+#     "min_action" : min_action,
+#     "max_action" : max_action,
+#     #"put_K" : put_strike,
+#     #"max_sellable_puts" : max_sellable_puts
+# }
 
 def simulatePPO(env, obs):
     done = False
@@ -76,7 +82,7 @@ def simulateDQN(env, obs):
 if __name__ == "__main__":
     
 
-    generator = GBM_Generator(S0, r, sigma, freq, seed=124, barrier=barrier ) # 
+    generator = HestonGenerator(S0, put_strike, r, sigma*sigma, rho, kappaH, theta, xi, barrier, ttm, seed=123)
     test_env_args = {
         "generator" : generator,
         "ttm" : ttm,
@@ -167,7 +173,7 @@ if __name__ == "__main__":
 
     # THRESHOLD delta hedge benchmark
     threshold_delta_agent = ThresholdDelta(generator.initial, call = False, n_puts_sold=n_puts_sold, min_action=min_action, put_K=put_strike) # , n_puts_sold=n_puts_sold, min_action=min_action &&& call->False # for barr3  put_K = put_strike
-    threshold_delta_agent.train(test_envPPO, 100, kappa)
+    threshold_delta_agent.train(test_envPPO, 50, kappa)
     
     obs = test_envPPO.reset()
     dfDelta2 = threshold_delta_agent.test(test_envPPO, obs, None)

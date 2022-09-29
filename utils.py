@@ -94,7 +94,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.show()
 
     # Option value
-    sns.relplot(data=dfDelta, kind="line", x="time", y="option")
+    sns.relplot(data=dfDelta.iloc[1:], kind="line", x="time", y="option")
     plt.xlabel("Time")
     plt.ylabel("Value")
     plt.title("Option value")
@@ -106,7 +106,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.xlabel("Time")
     plt.ylabel("Holdings")
     plt.title("Agent's position")
-    plt.legend()
+    #plt.legend()
     plt.savefig(plots_dir+"holdings.png", bbox_inches="tight")
     plt.show()
     
@@ -115,7 +115,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.xlabel("Time")
     plt.ylabel("Reward")
     plt.title("Rewards")
-    plt.legend()
+    #plt.legend()
     plt.savefig(plots_dir+"rewards.png", bbox_inches="tight")
     plt.show()
 
@@ -125,7 +125,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.xlabel("Time")
     plt.ylabel("P&L")
     plt.title("Cumulative P&L")
-    plt.legend()
+    #plt.legend()
     plt.savefig(plots_dir+"cumPnL.png", bbox_inches="tight")
     plt.show()
 
@@ -134,7 +134,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.xlabel("Time")
     plt.ylabel("Cost")
     plt.title("Cumulative Trading Costs")
-    plt.legend()
+    #plt.legend()
     plt.savefig(plots_dir+"cumCost.png", bbox_inches="tight")
     plt.show()
 
@@ -143,7 +143,7 @@ def plot_decisions2(df : pd.DataFrame):
     plt.xlabel("Time")
     plt.ylabel("Amount")
     plt.title("Cumulative Number of Trades")
-    plt.legend()
+    #plt.legend()
     plt.savefig(plots_dir+"cumNTrades.png", bbox_inches="tight")
     plt.show()
 

@@ -56,8 +56,8 @@ class DiscreteEnv(gym.Env):
         # Define payoff
         self.derivative_type = "option"
         self.call = True
-        self.up = True
-        self.out = False
+        # self.up = True
+        # self.out = False
 
     def _get_derivative_value(self):
         if self.derivative_type == "option":
@@ -99,17 +99,6 @@ class DiscreteEnv(gym.Env):
                                         trading_cost = self.cost - old_cost,
                                         holdings = self.state[0])
         
-        if self.terminal:
-            # at expiry need to liquidate our position in the underlying
-            liquidation_cost = self._get_trading_cost(0)
-            reward -= liquidation_cost
-
-            dic = self._out()
-            df = pd.DataFrame(dic)
-            # transform states
-            state = self.normalize_state(self.state)
-            return state, reward, self.terminal, {"output":df}
-
         # Add everything to memory if we're in testing phase
         if self.testing:
             self.option_memory.append(new_option_value)
@@ -121,6 +110,17 @@ class DiscreteEnv(gym.Env):
             self.actions_memory.append(action)
             self.pnl_memory.append(- 100 * (new_option_value - old_option_value) + (self.state[1] - old_und_value) * self.state[0] - (self.cost - old_cost))
         
+        if self.terminal:
+            # at expiry need to liquidate our position in the underlying
+            liquidation_cost = self._get_trading_cost(0)
+            reward -= liquidation_cost
+
+            dic = self._out()
+            df = pd.DataFrame(dic)
+            # transform states
+            state = self.normalize_state(self.state)
+            return state, reward, self.terminal, {"output":df}
+
         # transform states
         state = self.normalize_state(self.state)
         return state, reward, self.terminal, {"output":pd.DataFrame()}
@@ -289,6 +289,17 @@ class BarrierEnv(gym.Env):
         # check if terminal
         self.terminal = (self.state[-1] == 1) | self.generator.is_knocked
 
+        # Add everything to memory if we're in testing phase
+        if self.testing:
+            self.option_memory.append(new_barrier_value)
+            self.underlying_memory.append(self.state[1])
+            self.cost_memory.append(self.cost)
+            self.trades_memory.append(self.trades)
+            self.holdings_memory.append(self.state[0])
+            self.rewards_memory.append(reward)
+            self.actions_memory.append(action)
+            self.pnl_memory.append(pnl)
+
         if self.terminal:
             # at expiry need to liquidate our position in the underlying, in case knocked in -> liquidate
             liquidation_cost = self._get_trading_cost(0)
@@ -300,17 +311,6 @@ class BarrierEnv(gym.Env):
             state = self.normalize_state(self.state)
             return state, reward, self.terminal, {"output":df}
 
-        # Add everything to memory if we're in testing phase
-        if self.testing:
-            self.option_memory.append(new_barrier_value)
-            self.underlying_memory.append(self.state[1])
-            self.cost_memory.append(self.cost)
-            self.trades_memory.append(self.trades)
-            self.holdings_memory.append(self.state[0])
-            self.rewards_memory.append(reward)
-            self.actions_memory.append(action)
-            self.pnl_memory.append(pnl)
-        
         # transform states
         state = self.normalize_state(self.state)
         return state, reward, self.terminal, {"output":pd.DataFrame()}
@@ -482,6 +482,17 @@ class BarrierEnv2(gym.Env):
         # check if terminal
         self.terminal = (self.state[2] == 1) | self.generator.is_knocked
 
+        # Add everything to memory if we're in testing phase
+        if self.testing:
+            self.option_memory.append(new_barrier_value)
+            self.underlying_memory.append(self.state[1])
+            self.cost_memory.append(self.cost)
+            self.trades_memory.append(self.trades)
+            self.holdings_memory.append(self.state[0])
+            self.rewards_memory.append(reward)
+            self.actions_memory.append(action)
+            self.pnl_memory.append(pnl)
+
         if self.terminal:
             # at expiry need to liquidate our position in the underlying, in case knocked in -> liquidate
             liquidation_cost = self._get_trading_cost(0)
@@ -493,17 +504,6 @@ class BarrierEnv2(gym.Env):
             state = self.normalize_state(self.state)
             return state, reward, self.terminal, {"output":df}
 
-        # Add everything to memory if we're in testing phase
-        if self.testing:
-            self.option_memory.append(new_barrier_value)
-            self.underlying_memory.append(self.state[1])
-            self.cost_memory.append(self.cost)
-            self.trades_memory.append(self.trades)
-            self.holdings_memory.append(self.state[0])
-            self.rewards_memory.append(reward)
-            self.actions_memory.append(action)
-            self.pnl_memory.append(pnl)
-        
         # transform states
         state = self.normalize_state(self.state)
         return state, reward, self.terminal, {"output":pd.DataFrame()}
@@ -570,7 +570,7 @@ class BarrierEnv3(gym.Env):
                 kappa = 0.1,
                 cost_multiplier = 0.5,
                 testing = False,
-                reward_type = "static",
+                reward_type = "dynamic",
                 min_action = -100,
                 max_action = 100,
                 max_sellable_puts = 5,
@@ -656,7 +656,7 @@ class BarrierEnv3(gym.Env):
         old_barrier_value = self._get_derivative_value()
         old_und_value = self.state[1]
         old_opt_val = self.generator.get_option_value(self.put_strike, self.state[2], call=False)
-        old_static_hedge_value = self.state[4] * old_opt_val
+        #old_static_hedge_value = self.state[4] * old_opt_val
         
         # state: s -> s+1
         self.cost += self._get_trading_cost(action_und) + self._get_trading_cost_opt(action[1],old_opt_val) # 2nd one is for the puts
@@ -667,10 +667,10 @@ class BarrierEnv3(gym.Env):
         new_und = self.generator.get_next()
         self.state = [action_und, new_und, self.state[2] - 1, self._get_current_delta(self.state[1], self.state[2], action[1]), action[1]]
         new_barrier_value = self._get_derivative_value()
-        new_static_hedge_value = self.state[4] * self.generator.get_option_value(self.put_strike, self.state[2], call=False)
+        opt_value_change = self.generator.get_option_value(self.put_strike, self.state[2], call=False) - old_opt_val
 
         # Calculate reward
-        reward, pnl = self.reward_func(new_barrier_value, old_barrier_value, new_static_hedge_value, old_static_hedge_value, 
+        reward, pnl = self.reward_func(new_barrier_value, old_barrier_value, opt_value_change, self.state[4], 
                                         new_und = self.state[1], 
                                         old_und = old_und_value, 
                                         trading_cost = self.cost - old_cost,
@@ -678,6 +678,18 @@ class BarrierEnv3(gym.Env):
         
         # check if terminal
         self.terminal = (self.state[2] == 1) | self.generator.is_knocked
+
+        # Add everything to memory if we're in testing phase
+        if self.testing:
+            self.option_memory.append(new_barrier_value)
+            self.underlying_memory.append(self.state[1])
+            self.cost_memory.append(self.cost)
+            self.trades_memory.append(self.trades)
+            self.holdings_memory.append(self.state[0])
+            self.rewards_memory.append(reward)
+            self.actions_memory.append(action_und)
+            self.actions_memory_opt.append(action[1])
+            self.pnl_memory.append(pnl)
 
         if self.terminal:
             # at expiry need to liquidate our position in the underlying, in case knocked in -> liquidate and sell a single vanilla put
@@ -693,17 +705,6 @@ class BarrierEnv3(gym.Env):
             state = self.normalize_state(self.state)
             return state, reward, self.terminal, {"output":df}
 
-        # Add everything to memory if we're in testing phase
-        if self.testing:
-            self.option_memory.append(new_barrier_value)
-            self.underlying_memory.append(self.state[1])
-            self.cost_memory.append(self.cost)
-            self.trades_memory.append(self.trades)
-            self.holdings_memory.append(self.state[0])
-            self.rewards_memory.append(reward)
-            self.actions_memory.append(action_und)
-            self.actions_memory_opt.append(action[1])
-            self.pnl_memory.append(pnl)
         
         # transform states
         state = self.normalize_state(self.state)
@@ -713,7 +714,7 @@ class BarrierEnv3(gym.Env):
         return self.cost_multiplier * (abs(action-self.state[0]) + 0.01 * ((action - self.state[0])**2))
 
     def _get_trading_cost_opt(self, action, current_opt_val):
-        return self.cost_multiplier_opt * abs(action-self.state[4]) * current_opt_val * 0.005 * 100
+        return self.cost_multiplier_opt * abs(action-self.state[4]) * current_opt_val * 0.008 * 100 # cost is 0.8% of the current mid, per lot
     
     def _out(self):
         if self.testing:
